@@ -108,6 +108,7 @@ export class AutomaticAuditApp {
     document.getElementById('backToStep2')?.addEventListener('click', () => this.goToStep(2));
     document.getElementById('exportJson')?.addEventListener('click', () => this.exportResults('json'));
     document.getElementById('exportCsv')?.addEventListener('click', () => this.exportResults('csv'));
+    document.getElementById('generateReport')?.addEventListener('click', () => this.generateAccessibilityReport());
     document.getElementById('newAudit')?.addEventListener('click', () => this.resetApp());
     
     // Modal
@@ -743,6 +744,363 @@ export class AutomaticAuditApp {
     document.body.removeChild(a);
   }
 
+  private generateAccessibilityReport(): void {
+    if (!this.auditResults || !this.auditSummary) {
+      this.showError('No audit results available to generate report');
+      return;
+    }
+
+    // Log the audit data to check if it's dynamic or static
+    console.log('=== ACCESSIBILITY REPORT DATA ===');
+    console.log('Audit Summary:', this.auditSummary);
+    console.log('Audit Results:', this.auditResults);
+    console.log('Page Audit Data:', this.pageAuditData);
+    console.log('Total Pages:', this.auditSummary.totalPages);
+    console.log('Pages with Issues:', this.auditSummary.pagesWithIssues);
+    console.log('Errors:', this.auditSummary.errors);
+    console.log('Warnings:', this.auditSummary.warnings);
+    console.log('Hints:', this.auditSummary.hints);
+    console.log('Top Issues:', this.auditSummary.topIssues);
+    console.log('Categories:', this.auditSummary.categories);
+    console.log('================================');
+
+    // Remove any existing report modal
+    document.querySelectorAll('.report-modal').forEach(m => m.remove());
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal fade show d-block report-modal';
+    modal.tabIndex = -1;
+    modal.style.background = 'rgba(0,0,0,0.5)';
+    modal.innerHTML = `
+      <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Accessibility Report</h5>
+            <button type="button" class="btn-close" aria-label="Close" onclick="this.closest('.modal').remove()">
+            </button>
+          </div>
+          <div class="modal-body">
+            ${this.renderAccessibilityReport()}
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="this.closest('.modal').remove()">Close</button>
+            <button class="btn btn-primary" onclick="window.print()">Print Report</button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Dismiss modal on background click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
+      }
+    });
+  }
+
+  private renderAccessibilityReport(): string {
+    if (!this.auditSummary) return '';
+
+    // Calculate accessibility score using standard methodology: (Weighted Passed Checks / Total Applicable Weighted Checks) × 100
+    const totalIssues = this.auditSummary.errors + this.auditSummary.warnings + this.auditSummary.hints;
+    
+    // Try to get the actual pass/fail data from raw audit results
+    let totalPassed = 0;
+    let totalApplicable = 0;
+    let totalFailed = 0;
+    
+    if (this.auditResults && this.auditResults.length > 0) {
+      // Aggregate data from all pages
+      for (const result of this.auditResults) {
+        if (result.rawData && result.rawData.statistics) {
+          const stats = result.rawData.statistics;
+          totalPassed += stats.passed || 0;
+          totalApplicable += stats.totalApplicable || 0;
+          totalFailed += stats.violations || 0;
+        }
+      }
+    }
+    
+    // If we don't have raw data, fall back to a calculated approach
+    if (totalApplicable === 0) {
+      // Estimate based on typical axe-core checks (100+ checks per page)
+      const estimatedChecksPerPage = 100;
+      totalApplicable = this.auditSummary.totalPages * estimatedChecksPerPage;
+      totalPassed = totalApplicable - totalIssues;
+    }
+    
+    // Calculate the accessibility score using the standard formula
+    const score = totalApplicable > 0 ? Math.round((totalPassed / totalApplicable) * 100) : 0;
+
+    // Log the calculated values
+    console.log('=== ACCESSIBILITY SCORE CALCULATION ===');
+    console.log('Method: (Weighted Passed Checks / Total Applicable Weighted Checks) × 100');
+    console.log('Total Issues (Violations):', totalIssues);
+    console.log('Total Passed Checks:', totalPassed);
+    console.log('Total Applicable Checks:', totalApplicable);
+    console.log('Total Failed Checks:', totalFailed);
+    console.log('Score Formula:', totalPassed, '/', totalApplicable, '× 100 =', score);
+    console.log('Score Category:', this.getScoreCategory(score));
+    console.log('=====================================');
+
+    // Group issues by actual severity based on impact levels
+    const severityCounts = this.calculateSeverityCounts();
+    const criticalIssues = severityCounts.critical;
+    const seriousIssues = severityCounts.serious;
+    const moderateIssues = severityCounts.moderate;
+
+    // Get examples for each severity level based on actual impact
+    const criticalExamples = this.getIssueExamplesByImpact('critical', 3);
+    const seriousExamples = this.getIssueExamplesByImpact('serious', 3);
+    const moderateExamples = this.getIssueExamplesByImpact('moderate', 3);
+
+    // Log the examples being used
+    console.log('=== ISSUE EXAMPLES ===');
+    console.log('Critical Examples:', criticalExamples);
+    console.log('Serious Examples:', seriousExamples);
+    console.log('Moderate Examples:', moderateExamples);
+    console.log('====================');
+
+    return `
+      <div class="accessibility-report">
+        <div class="report-header mb-4">
+          <h2 class="text-center mb-3">Accessibility Report</h2>
+          <div class="score-display text-center mb-4">
+            <div class="score-circle ${this.getScoreCircleClass(score)}">
+              <span class="score-number">${score}</span>
+              <span class="score-label">/100</span>
+            </div>
+            <p class="score-description mt-2">Overall Accessibility Score</p>
+            <p class="score-category mt-1">${this.getScoreCategory(score)}</p>
+            <div class="score-details mt-2">
+              <small class="text-muted">
+                ${totalPassed} passed / ${totalApplicable} total checks
+              </small>
+            </div>
+          </div>
+        </div>
+
+        <div class="report-summary mb-4">
+          <div class="row text-center">
+            <div class="col-md-3 col-6 mb-3">
+              <div class="summary-card">
+                <div class="summary-number">${this.auditSummary.totalPages}</div>
+                <div class="summary-label">Pages Audited</div>
+              </div>
+            </div>
+            <div class="col-md-3 col-6 mb-3">
+              <div class="summary-card">
+                <div class="summary-number">${this.auditSummary.pagesWithIssues}</div>
+                <div class="summary-label">Pages with Issues</div>
+              </div>
+            </div>
+            <div class="col-md-3 col-6 mb-3">
+              <div class="summary-card">
+                <div class="summary-number">${totalIssues}</div>
+                <div class="summary-label">Total Issues</div>
+              </div>
+            </div>
+            <div class="col-md-3 col-6 mb-3">
+              <div class="summary-card">
+                <div class="summary-number">${this.auditSummary.topIssues?.length || 0}</div>
+                <div class="summary-label">Issue Categories</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="issues-breakdown">
+          <h3 class="mb-3">Issues Breakdown</h3>
+          <div class="table-responsive">
+            <table class="table table-striped accessibility-table">
+              <thead>
+                <tr>
+                  <th>Severity</th>
+                  <th>Issues Detected</th>
+                  <th>Examples Found</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="severity-critical">
+                  <td><span class="severity-badge critical">Critical</span></td>
+                  <td><strong>${criticalIssues}</strong></td>
+                  <td>${criticalExamples.join(', ')}</td>
+                </tr>
+                <tr class="severity-serious">
+                  <td><span class="severity-badge serious">Serious</span></td>
+                  <td><strong>${seriousIssues}</strong></td>
+                  <td>${seriousExamples.join(', ')}</td>
+                </tr>
+                <tr class="severity-moderate">
+                  <td><span class="severity-badge moderate">Moderate</span></td>
+                  <td><strong>${moderateIssues}</strong></td>
+                  <td>${moderateExamples.join(', ')}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="recommendations mt-4">
+          <h3 class="mb-3">Recommendations</h3>
+          <div class="recommendation-list">
+            ${this.generateRecommendations()}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private getIssueExamplesByImpact(impact: string, maxExamples: number = 3): string[] {
+    if (!this.auditResults) return [];
+
+    console.log(`=== GETTING ${impact.toUpperCase()} IMPACT EXAMPLES ===`);
+    console.log('Max Examples Requested:', maxExamples);
+    console.log('Total Audit Results:', this.auditResults.length);
+
+    const examples: string[] = [];
+    const seenExamples = new Set<string>();
+
+    for (const result of this.auditResults) {
+      if (result.error) continue;
+
+      // Check all issue types (errors, warnings, hints) for the specific impact
+      const allIssues = [
+        ...(result.issues.errors || []),
+        ...(result.issues.warnings || []),
+        ...(result.issues.hints || [])
+      ];
+
+      const matchingIssues = allIssues.filter(issue => 
+        (issue.impact || '').toLowerCase() === impact.toLowerCase()
+      );
+
+      console.log(`Processing ${result.url}: Found ${matchingIssues.length} ${impact} impact issues`);
+
+      for (const issue of matchingIssues) {
+        if (examples.length >= maxExamples) break;
+        
+        const example = this.getIssueExample(issue);
+        if (example && !seenExamples.has(example)) {
+          examples.push(example);
+          seenExamples.add(example);
+        }
+      }
+      
+      if (examples.length >= maxExamples) break;
+    }
+
+    console.log(`Final ${impact} impact examples:`, examples);
+    console.log(`===============================`);
+
+    return examples.length > 0 ? examples : ['No examples available'];
+  }
+
+
+  private getIssueExample(issue: any): string {
+    if (!issue) return '';
+    
+    // Try to extract meaningful example from issue data
+    if (issue.title) {
+      return issue.title;
+    }
+    if (issue.description) {
+      return issue.description.substring(0, 50) + (issue.description.length > 50 ? '...' : '');
+    }
+    if (issue.help) {
+      return issue.help.substring(0, 50) + (issue.help.length > 50 ? '...' : '');
+    }
+    if (issue.category) {
+      return this.formatCategoryName(issue.category);
+    }
+    
+    return 'Accessibility Issue';
+  }
+
+  private getScoreCategory(score: number): string {
+    if (score >= 90) return 'Good (Green)';
+    if (score >= 50) return 'Needs Improvement (Orange)';
+    return 'Poor (Red)';
+  }
+
+  private getScoreCircleClass(score: number): string {
+    if (score >= 90) return 'score-good';
+    if (score >= 50) return 'score-warning';
+    return 'score-poor';
+  }
+
+  private calculateSeverityCounts(): { critical: number; serious: number; moderate: number } {
+    let critical = 0;
+    let serious = 0;
+    let moderate = 0;
+
+    if (!this.auditResults) {
+      return { critical, serious, moderate };
+    }
+
+    // Count issues by their actual impact levels
+    for (const result of this.auditResults) {
+      if (result.error) continue;
+
+      // Count errors by impact
+      for (const issue of result.issues.errors || []) {
+        const impact = (issue.impact || 'serious').toLowerCase();
+        if (impact === 'critical') critical++;
+        else if (impact === 'serious') serious++;
+        else if (impact === 'moderate') moderate++;
+        else serious++; // Default to serious for unknown impacts
+      }
+
+      // Count warnings by impact
+      for (const issue of result.issues.warnings || []) {
+        const impact = (issue.impact || 'moderate').toLowerCase();
+        if (impact === 'critical') critical++;
+        else if (impact === 'serious') serious++;
+        else if (impact === 'moderate') moderate++;
+        else moderate++; // Default to moderate for warnings
+      }
+
+      // Count hints by impact
+      for (const issue of result.issues.hints || []) {
+        const impact = (issue.impact || 'minor').toLowerCase();
+        if (impact === 'critical') critical++;
+        else if (impact === 'serious') serious++;
+        else if (impact === 'moderate') moderate++;
+        else moderate++; // Default to moderate for hints
+      }
+    }
+
+    console.log('=== SEVERITY COUNTS ===');
+    console.log('Critical:', critical);
+    console.log('Serious:', serious);
+    console.log('Moderate:', moderate);
+    console.log('======================');
+
+    return { critical, serious, moderate };
+  }
+
+  private generateRecommendations(): string {
+    const recommendations = [
+      'Fix all critical accessibility errors to improve user experience',
+      'Address serious warnings to meet WCAG guidelines',
+      'Review moderate issues for better accessibility compliance',
+      'Implement proper ARIA labels and semantic HTML',
+      'Ensure sufficient color contrast ratios',
+      'Add alternative text for all images',
+      'Test keyboard navigation functionality',
+      'Validate HTML structure and semantics'
+    ];
+
+    return recommendations.map(rec => `
+      <div class="recommendation-item">
+        <i class="fas fa-check-circle text-success me-2"></i>
+        <span>${rec}</span>
+      </div>
+    `).join('');
+  }
+
   private goToStep(step: number): void {
     // Hide all steps
     document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
@@ -944,8 +1302,8 @@ export class AutomaticAuditApp {
 
   private renderPageCard(pageData: PageAuditData, index: number): string {
     const hasViolations = pageData.summary.totalViolations > 0;
-    const cardBorder = hasViolations ? 'border-danger' : 'border-success';
-    const cardHeaderClass = hasViolations ? 'bg-danger text-white' : 'bg-success text-white';
+    const cardBorder = hasViolations ? 'border-secondary' : 'border-success';
+    const cardHeaderClass = hasViolations ? 'bg-secondary text-white' : 'bg-success text-white';
     return `
       <div id="page-card-${index}" class="card ${cardBorder} h-100 shadow-sm" data-page-index="${index}" style="cursor:pointer;">
         <div class="card-header ${cardHeaderClass} d-flex flex-column flex-md-row justify-content-between align-items-md-center">

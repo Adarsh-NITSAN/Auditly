@@ -148,61 +148,66 @@ export class ReportService {
         const csvRows = [];
         csvRows.push([
             'Page URL',
-            'Issue ID',
-            'Issue Title',
-            'Level',
-            'Category',
-            'Impact',
-            'Description',
-            'Help Text',
-            'How to Fix',
-            'WCAG References',
-            'Selector',
-            'HTML Context',
-            'Failure Summary',
+            'Critical Issues',
+            'Serious Issues',
+            'Moderate Issues',
+            'Total Score'
         ].join(','));
         results.forEach(result => {
             if (result.error) {
                 csvRows.push([
-                    result.url,
+                    this.escapeCsvField(result.url),
                     'ERROR',
-                    'Failed to audit page',
-                    'error',
-                    'system',
-                    'critical',
-                    result.error,
-                    '',
-                    '',
-                    '',
-                    '',
-                    '',
-                    '',
+                    'ERROR',
+                    'ERROR',
+                    '0'
                 ].join(','));
                 return;
             }
-            if (result.issues) {
-                Object.entries(result.issues).forEach(([_level, issues]) => {
-                    issues.forEach(issue => {
-                        csvRows.push([
-                            this.escapeCsvField(result.url),
-                            this.escapeCsvField(issue.id),
-                            this.escapeCsvField(issue.title),
-                            this.escapeCsvField(issue.level),
-                            this.escapeCsvField(issue.category),
-                            this.escapeCsvField(issue.impact),
-                            this.escapeCsvField(issue.description),
-                            this.escapeCsvField(issue.help),
-                            this.escapeCsvField(issue.howToFix),
-                            this.escapeCsvField(issue.wcagReferences?.join('; ')),
-                            this.escapeCsvField(issue.selector),
-                            this.escapeCsvField(issue.html),
-                            this.escapeCsvField(issue.failureSummary),
-                        ].join(','));
-                    });
-                });
-            }
+            const severityCounts = this.calculatePageSeverityCounts(result);
+            const totalIssues = severityCounts.critical + severityCounts.serious + severityCounts.moderate;
+            const totalScore = Math.max(0, 100 - totalIssues);
+            csvRows.push([
+                this.escapeCsvField(result.url),
+                severityCounts.critical.toString(),
+                severityCounts.serious.toString(),
+                severityCounts.moderate.toString(),
+                totalScore.toString()
+            ].join(','));
         });
         return csvRows.join('\n');
+    }
+    calculatePageSeverityCounts(result) {
+        let critical = 0;
+        let serious = 0;
+        let moderate = 0;
+        if (!result.issues) {
+            return { critical, serious, moderate };
+        }
+        Object.values(result.issues).flat().forEach(issue => {
+            const impact = (issue.impact || 'serious').toLowerCase();
+            if (impact === 'critical') {
+                critical++;
+            }
+            else if (impact === 'serious') {
+                serious++;
+            }
+            else if (impact === 'moderate') {
+                moderate++;
+            }
+            else {
+                if (issue.level === 'error') {
+                    serious++;
+                }
+                else if (issue.level === 'warning') {
+                    moderate++;
+                }
+                else {
+                    moderate++;
+                }
+            }
+        });
+        return { critical, serious, moderate };
     }
     flattenIssues(issues, pageUrl) {
         const flattened = [];
