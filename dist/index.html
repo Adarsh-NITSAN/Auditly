@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automatic Accessibility Audit Tool</title>
+  <script type="module" crossorigin src="/assets/main-uS5Lu1Os.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/main-B3ZdLdIP.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="display-4 fw-bold">🔍 Automatic Accessibility Audit Tool</h1>
+            <p class="lead opacity-75">Comprehensive accessibility auditing for multiple pages</p>
+        </header>
+
+        <main class="main-content">
+            <!-- Step 1: URL Input -->
+            <section id="step1" class="step active">
+                <div class="card shadow-lg">
+                    <div class="card-body p-4">
+                        <h2 class="card-title h3 mb-3">Step 1: Enter Main URL</h2>
+                        <p class="card-text text-muted mb-4">Enter the main URL of the website you want to audit. The tool will crawl and discover all pages.</p>
+                        
+                        <div class="mb-3">
+                            <label for="mainUrl" class="form-label fw-semibold">Main Website URL:</label>
+                            <input type="url" class="form-control form-control-lg" id="mainUrl" placeholder="https://example.com" required>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="maxPages" class="form-label fw-semibold">Maximum Pages to Crawl:</label>
+                            <input type="number" class="form-control" id="maxPages" value="100" min="1" max="500">
+                        </div>
+
+                        <button id="startCrawl" class="btn btn-primary btn-lg">
+                            <span class="btn-text">Start Crawling</span>
+                            <span class="btn-loading d-none">
+                                <div class="spinner"></div>
+                                Crawling...
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 2: Page Selection -->
+            <section id="step2" class="step">
+                <div class="card shadow-lg">
+                    <div class="card-body p-4">
+                        <h2 class="card-title h3 mb-3">Step 2: Select Pages to Audit</h2>
+                        <p class="card-text text-muted mb-4">Review the discovered pages and select which ones to audit for accessibility issues.</p>
+                        
+                        <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+                            <button id="selectAll" class="btn btn-outline-secondary">Select All</button>
+                            <button id="deselectAll" class="btn btn-outline-secondary">Deselect All</button>
+                            <span id="pageCount" class="ms-auto fw-semibold text-primary">0 pages selected</span>
+                        </div>
+
+                        <div class="bg-light p-3 rounded mb-4">
+                            <h3 class="h5 mb-3">Add Custom URLs</h3>
+                            <div class="d-flex gap-2 mb-3">
+                                <input type="url" class="form-control" id="customUrl" placeholder="https://example.com/custom-page">
+                                <button id="addCustomUrl" class="btn btn-outline-secondary">Add</button>
+                            </div>
+                            <div id="customUrlsList" class="d-flex flex-wrap gap-2"></div>
+                        </div>
+
+                        <div id="pagesList" class="border rounded mb-4 " style="max-height: 400px; overflow-y: auto;">
+                            <!-- Pages will be populated here -->
+                        </div>
+
+                        <div class="d-flex gap-3 justify-content-between align-items-center flex-wrap">
+                            <button id="backToStep1" class="btn btn-outline-secondary">Back</button>
+                            <button id="startAudit" class="btn btn-primary">
+                                <span class="btn-text">Start Accessibility Audit</span>
+                                <span class="btn-loading d-none">
+                                    <div class="spinner"></div>
+                                    Auditing...
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 3: Results -->
+            <section id="step3" class="step">
+                <div class="card shadow-lg">
+                    <div class="card-body p-4">
+                        <h2 class="card-title h3 mb-4">Step 3: Audit Results</h2>
+                        
+                        <div id="resultsSummary" class="row g-3 mb-4">
+                            <!-- Summary will be populated here -->
+                        </div>
+
+                        <div class="d-flex gap-3 mb-4 flex-wrap">
+                            <button id="backToStep2" class="btn btn-outline-secondary">Back to Selection</button>
+                            <button id="exportJson" class="btn btn-outline-secondary">Export JSON</button>
+                            <button id="exportCsv" class="btn btn-outline-secondary">Export CSV</button>
+                            <button id="newAudit" class="btn btn-primary">Start New Audit</button>
+                        </div>
+
+                        <div id="resultsDetails" class="border-top pt-4">
+                            <!-- Detailed results will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="loading-overlay d-none">
+            <div class="card shadow-lg" style="max-width: 400px;">
+                <div class="card-body text-center p-4">
+                    <div class="spinner large"></div>
+                    <h3 id="loadingMessage" class="h5 mt-3">Processing...</h3>
+                    <div id="loadingProgress" class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Modal -->
+        <div id="errorModal" class="modal d-none" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 class="modal-title">Error</h3>
+                        <button type="button" class="btn-close" onclick="app.closeErrorModal()"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p id="errorMessage"></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-primary" onclick="app.closeErrorModal()">OK</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html> 

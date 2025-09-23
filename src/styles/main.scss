@@ -1,0 +1,324 @@
+// Custom Bootstrap Theme Variables
+:root {
+  --bs-primary: #0101d9 !important;
+  --bs-primary-rgb: 102, 126, 234;
+  --bs-secondary: #764ba2;
+  --bs-secondary-rgb: 118, 75, 162;
+  --bs-success: #10b981;
+  --bs-success-rgb: 16, 185, 129;
+  --bs-danger: #dc3545;
+  --bs-danger-rgb: 220, 53, 69;
+  --bs-warning: #ffee00;
+  --bs-warning-rgb: 255, 193, 7;
+  --bs-info: #17a2b8;
+  --bs-info-rgb: 23, 162, 184;
+}
+
+// Custom background gradient
+body {
+  background: var(--bs-primary) !important;
+  
+  .site-main {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 3rem auto;
+  }
+}
+
+// Custom header styling
+.header {
+  color: white;
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+// Custom step transitions
+.step {
+  display: none;
+  animation: fadeIn 0.3s ease-in-out;
+
+  &.active {
+    display: block;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Custom spinner
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 0.5rem;
+
+  &.large {
+    width: 40px;
+    height: 40px;
+    border-width: 4px;
+    margin-right: 0;
+    margin-bottom: 1rem;
+  }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+// Custom page cards container
+.page-cards-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+// Custom page card styling
+.page-card {
+  cursor: pointer;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  }
+
+  &.has-violations {
+    border-left: 4px solid var(--bs-danger);
+  }
+
+  &.no-violations {
+    border-left: 4px solid var(--bs-success);
+  }
+}
+
+// Custom violation stats
+.violation-stats {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+
+  .stat {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+
+    &.error {
+      background-color: rgba(var(--bs-danger-rgb), 0.1);
+      color: var(--bs-danger);
+    }
+
+    &.warning {
+      background-color: rgba(var(--bs-warning-rgb), 0.1);
+      color: var(--bs-warning);
+    }
+
+    &.hint {
+      background-color: rgba(var(--bs-info-rgb), 0.1);
+      color: var(--bs-info);
+    }
+  }
+}
+
+// Custom category list
+.category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+
+  .category-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    background-color: var(--bs-light);
+    border-radius: 0.375rem;
+
+    .category-name {
+      font-size: 0.875rem;
+      color: var(--bs-secondary);
+    }
+
+    .category-count {
+      font-weight: 600;
+      color: var(--bs-primary);
+      background: white;
+      padding: 0.125rem 0.25rem;
+      border-radius: 0.25rem;
+      font-size: 0.875rem;
+    }
+  }
+}
+
+// Custom loading overlay
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+  
+  // Ensure it works with Bootstrap display utilities
+  &.d-flex {
+    display: flex !important;
+  }
+  
+  &.d-none {
+    display: none !important;
+  }
+}
+
+// Custom progress bar
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--bs-light);
+  border-radius: 0.25rem;
+  overflow: hidden;
+  margin-top: 1rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(135deg, var(--bs-primary) 0%, var(--bs-secondary) 100%);
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+// Custom modal styling
+.modal-content {
+  border-radius: 0.75rem;
+  border: none;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+// Custom button hover effects
+.btn.btn-primary {
+  --bs-btn-bg: #0101d9;
+  transition: all 0.3s ease 0s;
+}
+
+.btn.btn-outline-secondary {
+  background-color: #ffee00;
+  color: #000000;
+  transition: all 0.3s ease 0s;
+
+  &:hover {
+    background-color: transparent;
+    color: #000000;
+  }
+}
+
+.btn.btn-primary:hover {
+  background-color: transparent;
+  border-color: #000000;
+  color: #000000;
+}
+
+// Custom form focus states
+.form-control:focus {
+  border-color: var(--bs-primary);
+  box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+// Custom alert styling
+.alert {
+  border: none;
+  border-radius: 0.5rem;
+}
+
+// Custom badge styling
+.badge {
+  font-weight: 600;
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  .page-cards-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .page-selection-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .custom-url-input {
+    flex-direction: column;
+  }
+}
+
+// Custom styling
+.page-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  background-color: var(--bs-light);
+  margin: .5rem;
+}
+
+.page-checkbox {
+  accent-color: #ffee00;
+  height: 18px;
+  width: 18px;
+  margin-top: 5px;
+}
+
+.modal-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  width: 100%;
+  background: #fff;
+  left: -13px;
+  right: 0;
+  margin: 0 auto;
+  max-width: calc(var(--bs-modal-width) - 0.1rem);
+  padding: var(--bs-modal-padding);
+  border-radius: 20px;
+  z-index: 999;
+}
+
+.modal-footer {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  background: #fff !important;
+  left: -13px;
+  right: 0;
+  margin: 0 auto;
+  max-width: calc(var(--bs-modal-width) - 0.1rem);
+  padding: var(--bs-modal-padding);
+  border-radius: 20px;
+  z-index: 999;
+}
