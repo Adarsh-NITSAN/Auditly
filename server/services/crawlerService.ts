@@ -51,7 +51,8 @@ export class CrawlerService {
         // Add sitemap URLs to the queue (excluding the main URL which is already there)
         for (const url of sitemapUrls) {
           const normalizedUrl = this.normalizeUrl(url);
-          if (normalizedUrl !== baseUrl && !visited.has(normalizedUrl) && !toVisit.includes(normalizedUrl)) {
+          // Skip excluded files and already processed URLs
+          if (normalizedUrl !== baseUrl && !this.isExcludedFile(normalizedUrl) && !visited.has(normalizedUrl) && !toVisit.includes(normalizedUrl)) {
             toVisit.push(normalizedUrl);
           }
         }
@@ -82,6 +83,12 @@ export class CrawlerService {
             continue;
           }
           
+          // Check if this is a robots.txt or sitemap.xml file and skip it
+          if (this.isExcludedFile(currentUrl)) {
+            console.log(`🚫 Skipping excluded file: ${currentUrl}`);
+            continue;
+          }
+          
           pages.push(pageData);
           
         // Only extract links from pages if we haven't reached the limit and not in homepage-only mode
@@ -92,7 +99,8 @@ export class CrawlerService {
           // Add new links to the queue
           for (const link of links) {
             const normalizedLink = this.normalizeUrl(link);
-            if (!visited.has(normalizedLink) && !toVisit.includes(normalizedLink)) {
+            // Skip excluded files and already processed URLs
+            if (!this.isExcludedFile(normalizedLink) && !visited.has(normalizedLink) && !toVisit.includes(normalizedLink)) {
               toVisit.push(normalizedLink);
             }
           }
@@ -505,5 +513,36 @@ export class CrawlerService {
     }
 
     return false;
+  }
+
+  /**
+   * Check if a URL is an excluded file (robots.txt, sitemap.xml, etc.)
+   * @param {string} url - The URL to check
+   * @returns {boolean} True if this is an excluded file
+   */
+  private isExcludedFile(url: string): boolean {
+    try {
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname.toLowerCase();
+      
+      // Check for robots.txt
+      if (pathname === '/robots.txt' || pathname.endsWith('/robots.txt')) {
+        return true;
+      }
+      
+      // Check for sitemap.xml
+      if (pathname === '/sitemap.xml' || pathname.endsWith('/sitemap.xml')) {
+        return true;
+      }
+      
+      // Check for other common sitemap variations
+      if (pathname.includes('/sitemap') && pathname.endsWith('.xml')) {
+        return true;
+      }
+      
+      return false;
+    } catch {
+      return false;
+    }
   }
 } 
