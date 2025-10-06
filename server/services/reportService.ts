@@ -218,10 +218,9 @@ export class ReportService {
 
       // Calculate severity counts by impact level
       const severityCounts = this.calculatePageSeverityCounts(result);
-      const totalIssues = severityCounts.critical + severityCounts.serious + severityCounts.moderate;
       
-      // Calculate total score (100 - total issues, minimum 0)
-      const totalScore = Math.max(0, 100 - totalIssues);
+      // Use scorePercentage directly from the API response instead of manual calculation
+      const totalScore = result.summary.scorePercentage || 0;
 
       csvRows.push([
         this.escapeCsvField(result.url),

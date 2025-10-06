@@ -47,6 +47,7 @@ export interface AuditResult {
     criticalIssues: number;
     seriousIssues: number;
     moderateIssues: number;
+    scorePercentage: number;
   };
   issues: {
     errors: AccessibilityIssue[];

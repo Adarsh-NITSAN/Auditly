@@ -130,7 +130,8 @@ export class AuditService {
                         pagesWithIssues: 0,
                         criticalIssues: 0,
                         seriousIssues: 0,
-                        moderateIssues: 0
+                        moderateIssues: 0,
+                        scorePercentage: 0
                     },
                     issues: {
                         errors: [],
@@ -209,6 +210,7 @@ export class AuditService {
                 criticalIssues: statistics.criticalIssues || 0,
                 seriousIssues: statistics.seriousIssues || 0,
                 moderateIssues: statistics.moderateIssues || 0,
+                scorePercentage: statistics.scorePercentage || 0,
             },
             issues: {
                 errors: processedData.errors,

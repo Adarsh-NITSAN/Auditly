@@ -472,6 +472,7 @@ export class AutomaticAuditApp {
       categories: {},
       topIssues: [],
       timestamp: new Date().toISOString(),
+      // scorePercentage: 0,
     };
 
     if (auditResults) {

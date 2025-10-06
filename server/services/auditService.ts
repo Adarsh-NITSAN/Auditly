@@ -139,16 +139,17 @@ export class AuditService {
           url: url,
           error: (error as Error).message,
           timestamp: new Date().toISOString(),
-          summary: {
-            totalIssues: 0,
-            errors: 0,
-            warnings: 0,
-            hints: 0,
-            pagesWithIssues: 0,
-            criticalIssues: 0,
-            seriousIssues: 0,
-            moderateIssues: 0
-          },
+      summary: {
+        totalIssues: 0,
+        errors: 0,
+        warnings: 0,
+        hints: 0,
+        pagesWithIssues: 0,
+        criticalIssues: 0,
+        seriousIssues: 0,
+        moderateIssues: 0,
+        scorePercentage: 0
+      },
           issues: {
             errors: [],
             warnings: [],
@@ -243,6 +244,7 @@ export class AuditService {
         criticalIssues: statistics.criticalIssues || 0,
         seriousIssues: statistics.seriousIssues || 0,
         moderateIssues: statistics.moderateIssues || 0,
+        scorePercentage: statistics.scorePercentage || 0,
       },
       issues: {
         errors: processedData.errors,
