@@ -21,6 +21,9 @@ interface AuditResult {
     warnings: number;
     hints: number;
     pagesWithIssues: number;
+    criticalIssues: number;
+    seriousIssues: number;
+    moderateIssues: number;
   };
   issues: {
     errors: any[];
@@ -38,6 +41,9 @@ interface AuditSummary {
   errors: number;
   warnings: number;
   hints: number;
+  criticalIssues: number;
+  seriousIssues: number;
+  moderateIssues: number;
   categories: Record<string, any>;
   topIssues: any[];
   timestamp: string;
@@ -82,6 +88,7 @@ export class AutomaticAuditApp {
   // private _currentStep: number = 1; // TODO: Track current step if needed
   private pages: CrawledPage[] = [];
   private customUrls: string[] = [];
+  private multiDomains: string[] = []; // New: Store multiple domains
   private auditResults: AuditResult[] | null = null;
   private auditSummary: AuditSummary | null = null;
   private pageAuditData: PageAuditData[] = [];
@@ -96,6 +103,7 @@ export class AutomaticAuditApp {
   private initializeEventListeners(): void {
     // Step 1: Start crawling
     document.getElementById('startCrawl')?.addEventListener('click', () => this.startCrawling());
+    document.getElementById('startMultiDomain')?.addEventListener('click', () => this.goToStep('2-multi'));
     
     // Step 2: Page selection
     document.getElementById('selectAll')?.addEventListener('click', () => this.selectAllPages());
@@ -103,6 +111,11 @@ export class AutomaticAuditApp {
     document.getElementById('addCustomUrl')?.addEventListener('click', () => this.addCustomUrl());
     document.getElementById('startAudit')?.addEventListener('click', () => this.startAudit());
     document.getElementById('backToStep1')?.addEventListener('click', () => this.goToStep(1));
+    
+    // Step 2 Multi-Domain: Multi-domain management
+    document.getElementById('addMultiDomain')?.addEventListener('click', () => this.addMultiDomain());
+    document.getElementById('startMultiDomainCrawl')?.addEventListener('click', () => this.startMultiDomainCrawl());
+    document.getElementById('backToStep1Multi')?.addEventListener('click', () => this.goToStep(1));
     
     // Step 3: Results
     document.getElementById('backToStep2')?.addEventListener('click', () => this.goToStep(2));
@@ -115,6 +128,9 @@ export class AutomaticAuditApp {
     document.querySelector('.modal-close')?.addEventListener('click', () => this.closeErrorModal());
     document.getElementById('customUrl')?.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') this.addCustomUrl();
+    });
+    document.getElementById('multiDomainUrl')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') this.addMultiDomain();
     });
   }
 
@@ -136,7 +152,6 @@ export class AutomaticAuditApp {
     this.setButtonLoading('startCrawl', true);
 
     try {
-      console.log(`Frontend sending: mainUrl=${mainUrl}, maxPages=${maxPages}`);
       const response = await fetch('/api/crawl', {
         method: 'POST',
         headers: {
@@ -262,6 +277,66 @@ export class AutomaticAuditApp {
     this.updatePageCount();
   }
 
+  private addMultiDomain(): void {
+    const multiDomainInput = document.getElementById('multiDomainUrl') as HTMLInputElement;
+    const url = multiDomainInput?.value.trim();
+
+    if (!url) {
+      this.showError('Please enter a domain URL');
+      return;
+    }
+
+    if (!this.isValidUrl(url)) {
+      this.showError('Please enter a valid URL starting with http:// or https://');
+      return;
+    }
+
+    if (this.multiDomains.includes(url)) {
+      this.showError('This domain has already been added');
+      return;
+    }
+
+    this.multiDomains.push(url);
+    this.renderMultiDomains();
+    if (multiDomainInput) multiDomainInput.value = '';
+  }
+
+  private renderMultiDomains(): void {
+    const multiDomainsList = document.getElementById('multiDomainsList');
+    if (!multiDomainsList) return;
+
+    multiDomainsList.innerHTML = this.multiDomains.map((url, index) => `
+      <div class="bg-light p-2 mb-2 rounded-2 d-flex justify-content-between">
+        <span>${url}</span>
+        <button type="button" class="btn-close" data-remove-index="${index}"></button>
+      </div>
+    `).join('');
+    this.attachRemoveMultiDomainListeners();
+  }
+
+  public removeMultiDomain(index: number): void {
+    this.multiDomains.splice(index, 1);
+    this.renderMultiDomains();
+  }
+
+  private attachRemoveMultiDomainListeners(): void {
+    const multiDomainsList = document.getElementById('multiDomainsList');
+    if (!multiDomainsList) return;
+    multiDomainsList.querySelectorAll('button[data-remove-index]').forEach(btn => {
+      btn.removeEventListener('click', this._removeMultiDomainHandler);
+      btn.addEventListener('click', this._removeMultiDomainHandler);
+    });
+  }
+
+  private _removeMultiDomainHandler = (e: Event) => {
+    e.stopPropagation();
+    const btn = e.currentTarget as HTMLButtonElement;
+    const index = btn.getAttribute('data-remove-index');
+    if (index !== null) {
+      this.removeMultiDomain(Number(index));
+    }
+  };
+
   private renderCustomUrls(): void {
     const customUrlsList = document.getElementById('customUrlsList');
     if (!customUrlsList) return;
@@ -281,6 +356,143 @@ export class AutomaticAuditApp {
     this.updatePageCount();
     // Re-attach event listeners for remove buttons
     this.attachRemoveCustomUrlListeners();
+  }
+
+  private async startMultiDomainCrawl(): Promise<void> {
+    if (this.multiDomains.length === 0) {
+      this.showError('Please add at least one domain to crawl');
+      return;
+    }
+
+    this.showLoading('Starting multi-domain crawl...');
+    this.setButtonLoading('startMultiDomainCrawl', true);
+
+    try {
+      // Use the working single-domain approach for each domain
+      const allPages: CrawledPage[] = [];
+      const allAuditResults: AuditResult[] = [];
+      const maxPages = parseInt((document.getElementById('maxPages') as HTMLInputElement)?.value || '10');
+
+      // Process each domain using the working /api/crawl endpoint
+      for (let i = 0; i < this.multiDomains.length; i++) {
+        const domain = this.multiDomains[i];
+        this.showLoading(`Crawling domain ${i + 1}/${this.multiDomains.length}: ${domain}...`);
+
+        try {
+          // Crawl the domain
+          const crawlResponse = await fetch('/api/crawl', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              mainUrl: domain,
+              maxPages: maxPages
+            })
+          });
+
+          const crawlData = await crawlResponse.json();
+
+          if (!crawlResponse.ok) {
+            throw new Error(crawlData.error || `Failed to crawl ${domain}`);
+          }
+
+          // Add domain prefix to pages
+          const domainPages = crawlData.pages.map((page: CrawledPage) => ({
+            ...page,
+            url: page.url,
+            title: `[${domain}] ${page.title}`,
+            selected: true
+          }));
+
+          allPages.push(...domainPages);
+
+          // Audit the pages for this domain
+          this.showLoading(`Auditing domain ${i + 1}/${this.multiDomains.length}: ${domain}...`);
+          
+          const auditResponse = await fetch('/api/audit', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              pages: domainPages.map((p: CrawledPage) => p.url),
+              customUrls: []
+            })
+          });
+
+          const auditData = await auditResponse.json();
+
+          if (!auditResponse.ok) {
+            throw new Error(auditData.error || `Failed to audit ${domain}`);
+          }
+
+          allAuditResults.push(...auditData.results);
+
+        } catch (error) {
+          console.error(`Error processing domain ${domain}:`, error);
+          // Continue with other domains even if one fails
+        }
+      }
+
+      // Set the combined results
+      this.pages = allPages;
+      this.auditResults = allAuditResults;
+      this.auditSummary = this.generateCombinedSummary(allAuditResults);
+      
+      // Process page-wise data
+      this.processPageWiseData();
+      
+      // Store audit data for comparison
+      this.storeAuditData();
+      
+      this.renderResults();
+      this.goToStep(3);
+
+    } catch (error) {
+      this.showError((error as Error).message);
+    } finally {
+      this.hideLoading();
+      this.setButtonLoading('startMultiDomainCrawl', false);
+    }
+  }
+
+
+  private generateCombinedSummary(auditResults: AuditResult[]): AuditSummary {
+    const summary: AuditSummary = {
+      totalPages: auditResults.length,
+      pagesWithIssues: 0,
+      totalIssues: 0,
+      errors: 0,
+      warnings: 0,
+      hints: 0,
+      criticalIssues: 0,
+      seriousIssues: 0,
+      moderateIssues: 0,
+      categories: {},
+      topIssues: [],
+      timestamp: new Date().toISOString(),
+    };
+
+    if (auditResults) {
+      for (const result of auditResults) {
+        if (result.error) continue;
+        
+        if (result.summary.totalIssues > 0) {
+          summary.pagesWithIssues++;
+        }
+        
+        summary.totalIssues += result.summary.totalIssues;
+        summary.errors += result.summary.errors;
+        summary.warnings += result.summary.warnings;
+        summary.hints += result.summary.hints;
+        summary.criticalIssues += result.summary.criticalIssues || 0;
+        summary.seriousIssues += result.summary.seriousIssues || 0;
+        summary.moderateIssues += result.summary.moderateIssues || 0;
+      }
+    }
+
+    return summary;
   }
 
   private async startAudit(): Promise<void> {
@@ -416,7 +628,6 @@ export class AutomaticAuditApp {
       summary: this.auditSummary,
       pages: this.pageAuditData.map(page => ({
         ...page,
-        // Remove rawData to save space - only keep essential info
         rawData: undefined
       })),
       // Store only essential raw results data
@@ -430,13 +641,14 @@ export class AutomaticAuditApp {
       }))
     };
 
+    console.log('auditData', auditData);
+
     this.auditHistory.push(auditData);
     this.saveAuditHistory();
   }
 
   private loadAuditHistory(): void {
     if (!this.localStorageEnabled) {
-      console.log('localStorage disabled, skipping audit history load');
       return;
     }
 
@@ -476,7 +688,6 @@ export class AutomaticAuditApp {
 
   private saveAuditHistory(): void {
     if (!this.localStorageEnabled) {
-      console.log('localStorage disabled, skipping audit history save');
       return;
     }
 
@@ -589,7 +800,6 @@ export class AutomaticAuditApp {
       if (this.localStorageEnabled) {
         localStorage.removeItem('auditHistory');
       }
-      console.log('Audit history cleared successfully');
     } catch (error) {
       console.error('Failed to clear audit history:', error);
     }
@@ -597,12 +807,10 @@ export class AutomaticAuditApp {
 
   public enableLocalStorage(): void {
     this.localStorageEnabled = true;
-    console.log('localStorage re-enabled for audit history');
   }
 
   public disableLocalStorage(): void {
     this.localStorageEnabled = false;
-    console.log('localStorage disabled for audit history');
   }
 
   public exportPageData(pageIndex: number): void {
@@ -750,20 +958,6 @@ export class AutomaticAuditApp {
       return;
     }
 
-    // Log the audit data to check if it's dynamic or static
-    console.log('=== ACCESSIBILITY REPORT DATA ===');
-    console.log('Audit Summary:', this.auditSummary);
-    console.log('Audit Results:', this.auditResults);
-    console.log('Page Audit Data:', this.pageAuditData);
-    console.log('Total Pages:', this.auditSummary.totalPages);
-    console.log('Pages with Issues:', this.auditSummary.pagesWithIssues);
-    console.log('Errors:', this.auditSummary.errors);
-    console.log('Warnings:', this.auditSummary.warnings);
-    console.log('Hints:', this.auditSummary.hints);
-    console.log('Top Issues:', this.auditSummary.topIssues);
-    console.log('Categories:', this.auditSummary.categories);
-    console.log('================================');
-
     // Remove any existing report modal
     document.querySelectorAll('.report-modal').forEach(m => m.remove());
     
@@ -834,34 +1028,26 @@ export class AutomaticAuditApp {
     // Calculate the accessibility score using the standard formula
     const score = totalApplicable > 0 ? Math.round((totalPassed / totalApplicable) * 100) : 0;
 
-    // Log the calculated values
-    console.log('=== ACCESSIBILITY SCORE CALCULATION ===');
-    console.log('Method: (Weighted Passed Checks / Total Applicable Weighted Checks) × 100');
-    console.log('Total Issues (Violations):', totalIssues);
-    console.log('Total Passed Checks:', totalPassed);
-    console.log('Total Applicable Checks:', totalApplicable);
-    console.log('Total Failed Checks:', totalFailed);
-    console.log('Score Formula:', totalPassed, '/', totalApplicable, '× 100 =', score);
-    console.log('Score Category:', this.getScoreCategory(score));
-    console.log('=====================================');
 
-    // Group issues by actual severity based on impact levels
-    const severityCounts = this.calculateSeverityCounts();
-    const criticalIssues = severityCounts.critical;
-    const seriousIssues = severityCounts.serious;
-    const moderateIssues = severityCounts.moderate;
+    // Get statistics from individual page summaries (populated from raw API data)
+    let criticalIssues = 0;
+    let seriousIssues = 0;
+    let moderateIssues = 0;
+    
+    if (this.auditResults && this.auditResults.length > 0) {
+      for (const result of this.auditResults) {
+        if (result.error) continue;
+        criticalIssues += result.summary.criticalIssues || 0;
+        seriousIssues += result.summary.seriousIssues || 0;
+        moderateIssues += result.summary.moderateIssues || 0;
+      }
+    }
 
     // Get examples for each severity level based on actual impact
     const criticalExamples = this.getIssueExamplesByImpact('critical', 3);
     const seriousExamples = this.getIssueExamplesByImpact('serious', 3);
     const moderateExamples = this.getIssueExamplesByImpact('moderate', 3);
 
-    // Log the examples being used
-    console.log('=== ISSUE EXAMPLES ===');
-    console.log('Critical Examples:', criticalExamples);
-    console.log('Serious Examples:', seriousExamples);
-    console.log('Moderate Examples:', moderateExamples);
-    console.log('====================');
 
     return `
       <div class="accessibility-report">
@@ -906,6 +1092,36 @@ export class AutomaticAuditApp {
               <div class="summary-card">
                 <div class="summary-number">${this.auditSummary.topIssues?.length || 0}</div>
                 <div class="summary-label">Issue Categories</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="issues-statistics mb-4">
+          <h3 class="mb-3">Accessibility Statistics</h3>
+          <div class="row text-center">
+            <div class="col-md-4 col-6 mb-3">
+              <div class="card border-danger shadow-sm">
+                <div class="card-body">
+                  <div class="display-4 text-danger">${criticalIssues}</div>
+                  <div class="text-danger">Critical Issues</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4 col-6 mb-3">
+              <div class="card border-warning shadow-sm">
+                <div class="card-body">
+                  <div class="display-4 text-warning">${seriousIssues}</div>
+                  <div class="text-warning">Serious Issues</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4 col-6 mb-3">
+              <div class="card border-info shadow-sm">
+                <div class="card-body">
+                  <div class="display-4 text-info">${moderateIssues}</div>
+                  <div class="text-info">Moderate Issues</div>
+                </div>
               </div>
             </div>
           </div>
@@ -956,9 +1172,6 @@ export class AutomaticAuditApp {
   private getIssueExamplesByImpact(impact: string, maxExamples: number = 3): string[] {
     if (!this.auditResults) return [];
 
-    console.log(`=== GETTING ${impact.toUpperCase()} IMPACT EXAMPLES ===`);
-    console.log('Max Examples Requested:', maxExamples);
-    console.log('Total Audit Results:', this.auditResults.length);
 
     const examples: string[] = [];
     const seenExamples = new Set<string>();
@@ -977,7 +1190,6 @@ export class AutomaticAuditApp {
         (issue.impact || '').toLowerCase() === impact.toLowerCase()
       );
 
-      console.log(`Processing ${result.url}: Found ${matchingIssues.length} ${impact} impact issues`);
 
       for (const issue of matchingIssues) {
         if (examples.length >= maxExamples) break;
@@ -992,8 +1204,6 @@ export class AutomaticAuditApp {
       if (examples.length >= maxExamples) break;
     }
 
-    console.log(`Final ${impact} impact examples:`, examples);
-    console.log(`===============================`);
 
     return examples.length > 0 ? examples : ['No examples available'];
   }
@@ -1031,55 +1241,6 @@ export class AutomaticAuditApp {
     return 'score-poor';
   }
 
-  private calculateSeverityCounts(): { critical: number; serious: number; moderate: number } {
-    let critical = 0;
-    let serious = 0;
-    let moderate = 0;
-
-    if (!this.auditResults) {
-      return { critical, serious, moderate };
-    }
-
-    // Count issues by their actual impact levels
-    for (const result of this.auditResults) {
-      if (result.error) continue;
-
-      // Count errors by impact
-      for (const issue of result.issues.errors || []) {
-        const impact = (issue.impact || 'serious').toLowerCase();
-        if (impact === 'critical') critical++;
-        else if (impact === 'serious') serious++;
-        else if (impact === 'moderate') moderate++;
-        else serious++; // Default to serious for unknown impacts
-      }
-
-      // Count warnings by impact
-      for (const issue of result.issues.warnings || []) {
-        const impact = (issue.impact || 'moderate').toLowerCase();
-        if (impact === 'critical') critical++;
-        else if (impact === 'serious') serious++;
-        else if (impact === 'moderate') moderate++;
-        else moderate++; // Default to moderate for warnings
-      }
-
-      // Count hints by impact
-      for (const issue of result.issues.hints || []) {
-        const impact = (issue.impact || 'minor').toLowerCase();
-        if (impact === 'critical') critical++;
-        else if (impact === 'serious') serious++;
-        else if (impact === 'moderate') moderate++;
-        else moderate++; // Default to moderate for hints
-      }
-    }
-
-    console.log('=== SEVERITY COUNTS ===');
-    console.log('Critical:', critical);
-    console.log('Serious:', serious);
-    console.log('Moderate:', moderate);
-    console.log('======================');
-
-    return { critical, serious, moderate };
-  }
 
   private generateRecommendations(): string {
     const recommendations = [
@@ -1101,7 +1262,7 @@ export class AutomaticAuditApp {
     `).join('');
   }
 
-  private goToStep(step: number): void {
+  private goToStep(step: number | string): void {
     // Hide all steps
     document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
     
@@ -1117,6 +1278,7 @@ export class AutomaticAuditApp {
   private resetApp(): void {
     this.pages = [];
     this.customUrls = [];
+    this.multiDomains = [];
     this.auditResults = null;
     this.auditSummary = null;
     
@@ -1124,19 +1286,23 @@ export class AutomaticAuditApp {
     const mainUrlInput = document.getElementById('mainUrl') as HTMLInputElement;
     const maxPagesInput = document.getElementById('maxPages') as HTMLInputElement;
     const customUrlInput = document.getElementById('customUrl') as HTMLInputElement;
+    const multiDomainInput = document.getElementById('multiDomainUrl') as HTMLInputElement;
     
     if (mainUrlInput) mainUrlInput.value = '';
     if (maxPagesInput) maxPagesInput.value = '100';
     if (customUrlInput) customUrlInput.value = '';
+    if (multiDomainInput) multiDomainInput.value = '';
     
     // Clear displays
     const pagesList = document.getElementById('pagesList');
     const customUrlsList = document.getElementById('customUrlsList');
+    const multiDomainsList = document.getElementById('multiDomainsList');
     const resultsSummary = document.getElementById('resultsSummary');
     const resultsDetails = document.getElementById('resultsDetails');
     
     if (pagesList) pagesList.innerHTML = '';
     if (customUrlsList) customUrlsList.innerHTML = '';
+    if (multiDomainsList) multiDomainsList.innerHTML = '';
     if (resultsSummary) resultsSummary.innerHTML = '';
     if (resultsDetails) resultsDetails.innerHTML = '';
     
@@ -1144,7 +1310,6 @@ export class AutomaticAuditApp {
   }
 
   private showLoading(message: string): void {
-    console.log('showLoading called with message:', message);
     const loadingMessage = document.getElementById('loadingMessage');
     const loadingOverlay = document.getElementById('loadingOverlay');
     
@@ -1152,19 +1317,16 @@ export class AutomaticAuditApp {
     if (loadingOverlay) {
       loadingOverlay.classList.remove('d-none');
       loadingOverlay.classList.add('d-flex');
-      console.log('Loading overlay classes:', loadingOverlay.className);
     } else {
       console.error('Loading overlay element not found');
     }
   }
 
   private hideLoading(): void {
-    console.log('hideLoading called');
     const loadingOverlay = document.getElementById('loadingOverlay');
     if (loadingOverlay) {
       loadingOverlay.classList.remove('d-flex');
       loadingOverlay.classList.add('d-none');
-      console.log('Loading overlay hidden');
     } else {
       console.error('Loading overlay element not found');
     }

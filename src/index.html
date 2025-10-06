@@ -33,17 +33,52 @@
                                 <input type="number" class="form-control" id="maxPages" value="100" min="1" max="500">
                             </div>
     
-                            <button id="startCrawl" class="btn btn-primary btn-lg">
-                                <span class="btn-text">Start Crawling</span>
-                                <span class="btn-loading d-none">
-                                    <div class="spinner"></div>
-                                    Crawling...
-                                </span>
-                            </button>
+                            <div class="d-flex gap-3 flex-wrap">
+                                <button id="startCrawl" class="btn btn-primary btn-lg">
+                                    <span class="btn-text">Start Crawling</span>
+                                    <span class="btn-loading d-none">
+                                        <div class="spinner"></div>
+                                        Crawling...
+                                    </span>
+                                </button>
+                                <button id="startMultiDomain" class="btn btn-outline-primary btn-lg">
+                                    <span class="btn-text">Search Multiple Domains</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </section>
     
+                <!-- Step 2: Multi-Domain Selection -->
+                <section id="step2-multi" class="step">
+                    <div class="card shadow-lg">
+                        <div class="card-body p-4">
+                            <h2 class="card-title h3 mb-3">Step 2: Add Multiple Domains</h2>
+                            <p class="card-text text-muted mb-4">Add multiple domains to audit. Each domain will be crawled and audited separately, then combined into a single report.</p>
+                            
+                            <div class="bg-light p-3 rounded mb-4">
+                                <h3 class="h5 mb-3">Add Domains</h3>
+                                <div class="d-flex gap-2 mb-3">
+                                    <input type="url" class="form-control" id="multiDomainUrl" placeholder="https://example.com">
+                                    <button id="addMultiDomain" class="btn btn-outline-secondary">Add</button>
+                                </div>
+                                <div id="multiDomainsList" class="d-flex flex-wrap gap-2"></div>
+                            </div>
+
+                            <div class="d-flex gap-3 justify-content-between align-items-center flex-wrap">
+                                <button id="backToStep1Multi" class="btn btn-outline-secondary">Back</button>
+                                <button id="startMultiDomainCrawl" class="btn btn-primary">
+                                    <span class="btn-text">Start Multi-Domain Crawl</span>
+                                    <span class="btn-loading d-none">
+                                        <div class="spinner"></div>
+                                        Crawling...
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- Step 2: Page Selection -->
                 <section id="step2" class="step">
                     <div class="card shadow-lg">
@@ -114,7 +149,7 @@
             <div id="loadingOverlay" class="loading-overlay d-none">
                 <div class="card shadow-lg" style="max-width: 400px;">
                     <div class="card-body text-center p-4">
-                        <div class="spinner large"></div>
+                        <div class="spinner-border text-primary"></div>
                         <h3 id="loadingMessage" class="h5 mt-3">Processing...</h3>
                         <div id="loadingProgress" class="progress-bar">
                             <div class="progress-fill"></div>

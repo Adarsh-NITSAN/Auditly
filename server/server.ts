@@ -130,6 +130,94 @@ app.post('/api/crawl', async (req: Request, res: Response) => {
 });
 
 /**
+ * Crawl multiple domains for pages and run accessibility audits
+ * @route POST /api/crawl-multi
+ * @param {string[]} domains - Array of domain URLs to crawl
+ * @param {number} maxPages - Maximum number of pages to crawl per domain (1-500)
+ * @returns {Object} Combined results from all domains
+ */
+app.post('/api/crawl-multi', async (req: Request, res: Response) => {
+  try {
+    const { domains, maxPages = 100 } = req.body;
+    
+    if (!domains || !Array.isArray(domains) || domains.length === 0) {
+      return res.status(400).json({ error: 'At least one domain is required' });
+    }
+
+    // Validate maxPages
+    const validatedMaxPages = parseInt(maxPages, 10);
+    if (isNaN(validatedMaxPages) || validatedMaxPages < 1 || validatedMaxPages > 500) {
+      return res.status(400).json({ error: 'maxPages must be a number between 1 and 500' });
+    }
+
+    console.log(`Received multi-domain crawl request: ${domains.length} domains, maxPages=${validatedMaxPages}`);
+
+    const results = [];
+    
+    // Process each domain
+    for (const domain of domains) {
+      try {
+        console.log(`🔍 Crawling domain: ${domain}`);
+        
+        // Crawl the domain
+        const pages = await crawlerService.crawlWebsite(domain, validatedMaxPages);
+        
+        // Run accessibility audit on discovered pages
+        const pageUrls = pages.map(page => page.url);
+        const auditResults = await auditService.auditPages(pageUrls);
+        
+        // Generate summary for this domain
+        const summary = reportService.generateSummary(auditResults);
+        
+        results.push({
+          domain,
+          pages: pages.map(page => ({
+            url: page.url,
+            title: page.title,
+            selected: true
+          })),
+          auditResults,
+          summary
+        });
+        
+        console.log(`✅ Completed domain ${domain}: ${pages.length} pages, ${auditResults.length} audit results`);
+        
+      } catch (error) {
+        console.error(`❌ Error processing domain ${domain}:`, (error as Error).message);
+        results.push({
+          domain,
+          error: (error as Error).message,
+          pages: [],
+          auditResults: [],
+          summary: {
+            totalPages: 0,
+            pagesWithIssues: 0,
+            totalIssues: 0,
+            errors: 0,
+            warnings: 0,
+            hints: 0,
+            criticalIssues: 0,
+            seriousIssues: 0,
+            moderateIssues: 0,
+            categories: {},
+            topIssues: [],
+            timestamp: new Date().toISOString()
+          }
+        });
+      }
+    }
+
+    return res.json({ 
+      success: true, 
+      results 
+    });
+  } catch (error) {
+    console.error('Multi-domain crawl error:', error);
+    return res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
  * Run accessibility audit on selected pages
  * @route POST /api/audit
  * @param {string[]} pages - Array of page URLs to audit

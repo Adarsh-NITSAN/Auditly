@@ -44,6 +44,9 @@ export interface AuditResult {
     warnings: number;
     hints: number;
     pagesWithIssues: number;
+    criticalIssues: number;
+    seriousIssues: number;
+    moderateIssues: number;
   };
   issues: {
     errors: AccessibilityIssue[];
@@ -62,6 +65,9 @@ export interface AuditSummary {
   errors: number;
   warnings: number;
   hints: number;
+  criticalIssues: number;
+  seriousIssues: number;
+  moderateIssues: number;
   categories: Record<string, CategorySummary>;
   topIssues: TopIssue[];
   timestamp: string;

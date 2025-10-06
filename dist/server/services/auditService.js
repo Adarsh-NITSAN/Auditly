@@ -127,7 +127,10 @@ export class AuditService {
                         errors: 0,
                         warnings: 0,
                         hints: 0,
-                        pagesWithIssues: 0
+                        pagesWithIssues: 0,
+                        criticalIssues: 0,
+                        seriousIssues: 0,
+                        moderateIssues: 0
                     },
                     issues: {
                         errors: [],
@@ -193,6 +196,7 @@ export class AuditService {
         const results = data.results || data;
         const filteredData = this.filterExcludedIssues(results);
         const processedData = this.transformAndCategorizeIssues(filteredData);
+        const statistics = results.statistics || {};
         return {
             url: url,
             timestamp: new Date().toISOString(),
@@ -202,6 +206,9 @@ export class AuditService {
                 warnings: processedData.warnings.length,
                 hints: processedData.hints.length,
                 pagesWithIssues: processedData.totalIssues > 0 ? 1 : 0,
+                criticalIssues: statistics.criticalIssues || 0,
+                seriousIssues: statistics.seriousIssues || 0,
+                moderateIssues: statistics.moderateIssues || 0,
             },
             issues: {
                 errors: processedData.errors,

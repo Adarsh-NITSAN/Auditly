@@ -19,6 +19,9 @@ export class ReportService {
             errors: 0,
             warnings: 0,
             hints: 0,
+            criticalIssues: 0,
+            seriousIssues: 0,
+            moderateIssues: 0,
             categories: {},
             topIssues: [],
             timestamp: new Date().toISOString(),
@@ -37,6 +40,9 @@ export class ReportService {
             summary.errors += pageSummary.errors;
             summary.warnings += pageSummary.warnings;
             summary.hints += pageSummary.hints;
+            summary.criticalIssues += pageSummary.criticalIssues || 0;
+            summary.seriousIssues += pageSummary.seriousIssues || 0;
+            summary.moderateIssues += pageSummary.moderateIssues || 0;
             if (result.issues) {
                 Object.values(result.issues).flat().forEach(issue => {
                     if (this.isViolationIssue(issue)) {
@@ -178,36 +184,11 @@ export class ReportService {
         return csvRows.join('\n');
     }
     calculatePageSeverityCounts(result) {
-        let critical = 0;
-        let serious = 0;
-        let moderate = 0;
-        if (!result.issues) {
-            return { critical, serious, moderate };
-        }
-        Object.values(result.issues).flat().forEach(issue => {
-            const impact = (issue.impact || 'serious').toLowerCase();
-            if (impact === 'critical') {
-                critical++;
-            }
-            else if (impact === 'serious') {
-                serious++;
-            }
-            else if (impact === 'moderate') {
-                moderate++;
-            }
-            else {
-                if (issue.level === 'error') {
-                    serious++;
-                }
-                else if (issue.level === 'warning') {
-                    moderate++;
-                }
-                else {
-                    moderate++;
-                }
-            }
-        });
-        return { critical, serious, moderate };
+        return {
+            critical: result.summary.criticalIssues || 0,
+            serious: result.summary.seriousIssues || 0,
+            moderate: result.summary.moderateIssues || 0
+        };
     }
     flattenIssues(issues, pageUrl) {
         const flattened = [];
