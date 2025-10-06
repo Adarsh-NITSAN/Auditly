@@ -322,11 +322,58 @@ body {
 
 // Multi-domain step styling
 #step2-multi {
-  .card-body {
-    .bg-light {
-      background-color: rgba(var(--bs-primary-rgb), 0.05) !important;
-      border: 1px solid rgba(var(--bs-primary-rgb), 0.1);
+  
+}
+
+// Domain card styling
+.domain-card {
+  transition: all 0.3s ease;
+  border: 1px solid #dee2e6 !important;
+  width: 100%;
+  
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+  }
+  
+  .domain-info {
+    flex: 1;
+    
+    h6 {
+      color: var(--bs-primary);
+      font-size: 1rem;
     }
+    
+    .domain-stats {
+      .badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+      }
+    }
+    
+    .domain-status {
+      font-style: italic;
+    }
+  }
+  
+  .domain-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    
+    .btn-group {
+      .btn {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.5rem;
+      }
+    }
+  }
+}
+
+.card-body {
+  .bg-light {
+    background-color: rgba(var(--bs-primary-rgb), 0.05) !important;
+    border: 1px solid rgba(var(--bs-primary-rgb), 0.1);
   }
 }
 

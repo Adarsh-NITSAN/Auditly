@@ -100,7 +100,7 @@ app.get('/api/test-auth', async (_req: Request, res: Response) => {
  */
 app.post('/api/crawl', async (req: Request, res: Response) => {
   try {
-    let { mainUrl, maxPages = 100 } = req.body;
+    let { mainUrl, maxPages = 100, homepageOnly = false } = req.body;
     
     if (!mainUrl) {
       return res.status(400).json({ error: 'Main URL is required' });
@@ -112,9 +112,9 @@ app.post('/api/crawl', async (req: Request, res: Response) => {
       console.warn(`Invalid maxPages received: ${req.body.maxPages}`);
       return res.status(400).json({ error: 'maxPages must be a number between 1 and 500' });
     }
-    console.log(`Received crawl request: mainUrl=${mainUrl}, maxPages=${maxPages}, raw body:`, JSON.stringify(req.body));
+    console.log(`Received crawl request: mainUrl=${mainUrl}, maxPages=${maxPages}, homepageOnly=${homepageOnly}, raw body:`, JSON.stringify(req.body));
 
-    const pages = await crawlerService.crawlWebsite(mainUrl, maxPages);
+    const pages = await crawlerService.crawlWebsite(mainUrl, maxPages, homepageOnly);
     return res.json({ 
       success: true, 
       pages: pages.map(page => ({

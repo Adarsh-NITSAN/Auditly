@@ -10,7 +10,7 @@ export class CrawlerService {
         this.crawlDelay = parseInt(process.env.CRAWL_DELAY || '1000');
         this.timeout = parseInt(process.env.REQUEST_TIMEOUT || '30000');
     }
-    async crawlWebsite(mainUrl, maxPages = this.maxPages) {
+    async crawlWebsite(mainUrl, maxPages = this.maxPages, homepageOnly = false) {
         const baseUrl = this.normalizeUrl(mainUrl);
         const visited = new Set();
         const toVisit = [baseUrl];
@@ -18,34 +18,46 @@ export class CrawlerService {
         const domain = new URL(baseUrl).hostname;
         console.log(`🔍 Starting crawl of: ${baseUrl}`);
         console.log(`📊 Max pages to crawl (enforced): ${maxPages}`);
-        const sitemapUrls = await this.getSitemapUrls(baseUrl, domain);
-        if (sitemapUrls.length > 0) {
-            console.log(`🗺️  Found ${sitemapUrls.length} URLs in sitemap.xml`);
-            for (const url of sitemapUrls) {
-                if (url !== baseUrl && !visited.has(url) && !toVisit.includes(url)) {
-                    toVisit.push(url);
+        console.log(`🏠 Homepage only mode: ${homepageOnly}`);
+        if (!homepageOnly) {
+            const sitemapUrls = await this.getSitemapUrls(baseUrl, domain);
+            if (sitemapUrls.length > 0) {
+                console.log(`🗺️  Found ${sitemapUrls.length} URLs in sitemap.xml`);
+                for (const url of sitemapUrls) {
+                    const normalizedUrl = this.normalizeUrl(url);
+                    if (normalizedUrl !== baseUrl && !visited.has(normalizedUrl) && !toVisit.includes(normalizedUrl)) {
+                        toVisit.push(normalizedUrl);
+                    }
                 }
+            }
+            else {
+                console.log(`⚠️  No sitemap.xml found or no valid URLs extracted`);
             }
         }
         else {
-            console.log(`⚠️  No sitemap.xml found or no valid URLs extracted`);
+            console.log(`🏠 Homepage-only mode: Skipping sitemap discovery and link extraction`);
         }
         while (toVisit.length > 0 && pages.length < maxPages) {
             const currentUrl = toVisit.shift();
-            if (visited.has(currentUrl)) {
+            const normalizedCurrentUrl = this.normalizeUrl(currentUrl);
+            if (visited.has(normalizedCurrentUrl)) {
                 continue;
             }
-            visited.add(currentUrl);
+            visited.add(normalizedCurrentUrl);
             try {
                 console.log(`📄 Crawling: ${currentUrl}`);
                 const pageData = await this.fetchPage(currentUrl);
                 if (pageData) {
+                    if (this.is404Page(currentUrl, pageData)) {
+                        continue;
+                    }
                     pages.push(pageData);
-                    if (pages.length < maxPages) {
+                    if (pages.length < maxPages && !homepageOnly) {
                         const links = this.extractLinks(pageData.html, baseUrl, domain);
                         for (const link of links) {
-                            if (!visited.has(link) && !toVisit.includes(link)) {
-                                toVisit.push(link);
+                            const normalizedLink = this.normalizeUrl(link);
+                            if (!visited.has(normalizedLink) && !toVisit.includes(normalizedLink)) {
+                                toVisit.push(normalizedLink);
                             }
                         }
                     }
@@ -288,9 +300,22 @@ export class CrawlerService {
     }
     normalizeUrl(url) {
         if (!url.startsWith('http://') && !url.startsWith('https://')) {
-            return `https://${url}`;
+            url = `https://${url}`;
         }
-        return url;
+        try {
+            const urlObj = new URL(url);
+            if (urlObj.pathname === '/' || urlObj.pathname === '') {
+                return `${urlObj.protocol}//${urlObj.hostname}/`;
+            }
+            if (urlObj.pathname.endsWith('/') && urlObj.pathname !== '/') {
+                const newPath = urlObj.pathname.slice(0, -1);
+                return `${urlObj.protocol}//${urlObj.hostname}${newPath}`;
+            }
+            return urlObj.toString();
+        }
+        catch {
+            return url;
+        }
     }
     async getSitemapUrls(baseUrl, domain) {
         const sitemapUrl = `${baseUrl}/sitemap.xml`;
@@ -361,6 +386,25 @@ export class CrawlerService {
     }
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    is404Page(url, pageData) {
+        const urlObj = new URL(url);
+        const urlPath = urlObj.pathname.toLowerCase();
+        if (urlPath.includes('/404') || urlPath.includes('/not-found') || urlPath.includes('/error')) {
+            return true;
+        }
+        if (pageData.statusCode === 404) {
+            return true;
+        }
+        const title = pageData.title.toLowerCase();
+        if (title.includes('404') || title.includes('not found') || title.includes('page not found')) {
+            return true;
+        }
+        const html = pageData.html.toLowerCase();
+        if (html.includes('404') || html.includes('not found') || html.includes('page not found')) {
+            return true;
+        }
+        return false;
     }
 }
 //# sourceMappingURL=crawlerService.js.map

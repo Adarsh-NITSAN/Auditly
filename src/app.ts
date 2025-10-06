@@ -24,6 +24,7 @@ interface AuditResult {
     criticalIssues: number;
     seriousIssues: number;
     moderateIssues: number;
+    scorePercentage: number;
   };
   issues: {
     errors: any[];
@@ -44,6 +45,7 @@ interface AuditSummary {
   criticalIssues: number;
   seriousIssues: number;
   moderateIssues: number;
+  scorePercentage: number;
   categories: Record<string, any>;
   topIssues: any[];
   timestamp: string;
@@ -89,6 +91,7 @@ export class AutomaticAuditApp {
   private pages: CrawledPage[] = [];
   private customUrls: string[] = [];
   private multiDomains: string[] = []; // New: Store multiple domains
+  private domainResults: Map<string, { pages: CrawledPage[], auditResults: AuditResult[], auditSummary: AuditSummary }> = new Map(); // Store results per domain
   private auditResults: AuditResult[] | null = null;
   private auditSummary: AuditSummary | null = null;
   private pageAuditData: PageAuditData[] = [];
@@ -291,12 +294,15 @@ export class AutomaticAuditApp {
       return;
     }
 
-    if (this.multiDomains.includes(url)) {
+    // Normalize the URL to prevent duplicates (e.g., https://example.com and https://example.com/)
+    const normalizedUrl = this.normalizeUrl(url);
+
+    if (this.multiDomains.includes(normalizedUrl)) {
       this.showError('This domain has already been added');
       return;
     }
 
-    this.multiDomains.push(url);
+    this.multiDomains.push(normalizedUrl);
     this.renderMultiDomains();
     if (multiDomainInput) multiDomainInput.value = '';
   }
@@ -305,13 +311,60 @@ export class AutomaticAuditApp {
     const multiDomainsList = document.getElementById('multiDomainsList');
     if (!multiDomainsList) return;
 
-    multiDomainsList.innerHTML = this.multiDomains.map((url, index) => `
-      <div class="bg-light p-2 mb-2 rounded-2 d-flex justify-content-between">
-        <span>${url}</span>
-        <button type="button" class="btn-close" data-remove-index="${index}"></button>
-      </div>
-    `).join('');
+    multiDomainsList.innerHTML = this.multiDomains.map((url, index) => {
+      const domainResult = this.domainResults.get(url);
+      const hasResults = domainResult && domainResult.auditResults.length > 0;
+      
+      return `
+        <div class="domain-card bg-light p-3 mb-3 rounded-2 border">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div class="domain-info">
+              <h6 class="mb-1 fw-bold">${url}</h6>
+              ${hasResults ? `
+                <div class="domain-stats text-muted small">
+                  <span class="badge bg-${domainResult.auditSummary.errors > 0 ? 'danger' : 'success'} me-1">
+                    ${domainResult.auditSummary.errors} errors
+                  </span>
+                  <span class="badge bg-${domainResult.auditSummary.warnings > 0 ? 'warning' : 'success'} me-1">
+                    ${domainResult.auditSummary.warnings} warnings
+                  </span>
+                  <span class="badge bg-info me-1">
+                    ${domainResult.auditSummary.totalIssues} total issues
+                  </span>
+                </div>
+              ` : `
+                <div class="domain-status text-muted small">
+                  ${domainResult ? 'Processing completed' : 'Ready to process'}
+                </div>
+              `}
+            </div>
+            <div class="domain-actions">
+              ${hasResults ? `
+                <div class="btn-group" role="group">
+                  <button type="button" class="btn btn-sm btn-outline-primary" data-domain="${url}" data-action="view">
+                    View Details
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-success" data-domain="${url}" data-action="report">
+                    Generate Report
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" data-domain="${url}" data-action="export">
+                    Export
+                  </button>
+                </div>
+              ` : `
+                <button type="button" class="btn btn-sm btn-primary" data-domain="${url}" data-action="process">
+                  Process Domain
+                </button>
+              `}
+              <button type="button" class="btn-close ms-2" data-remove-index="${index}"></button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
     this.attachRemoveMultiDomainListeners();
+    this.attachDomainActionListeners();
   }
 
   public removeMultiDomain(index: number): void {
@@ -326,6 +379,100 @@ export class AutomaticAuditApp {
       btn.removeEventListener('click', this._removeMultiDomainHandler);
       btn.addEventListener('click', this._removeMultiDomainHandler);
     });
+  }
+
+  private attachDomainActionListeners(): void {
+    const multiDomainsList = document.getElementById('multiDomainsList');
+    if (!multiDomainsList) return;
+    
+    multiDomainsList.querySelectorAll('button[data-action]').forEach(btn => {
+      btn.removeEventListener('click', this._domainActionHandler);
+      btn.addEventListener('click', this._domainActionHandler);
+    });
+  }
+
+  private _domainActionHandler = (event: Event) => {
+    const target = event.target as HTMLButtonElement;
+    const domain = target.getAttribute('data-domain');
+    const action = target.getAttribute('data-action');
+    
+    if (!domain || !action) return;
+    
+    switch (action) {
+      case 'process':
+        this.processSingleDomainAsync(domain);
+        break;
+      case 'view':
+        this.viewDomainDetails(domain);
+        break;
+      case 'report':
+        this.generateDomainReport(domain);
+        break;
+      case 'export':
+        this.exportDomainData(domain);
+        break;
+    }
+  };
+
+  private async processSingleDomainAsync(domain: string): Promise<void> {
+    this.showLoading(`Processing ${domain} (first 3 pages)...`);
+    
+    try {
+      await this.processSingleDomain(domain, 3); // Always use first 3 pages for multi-domain
+      this.renderMultiDomains(); // Refresh the UI
+      this.hideLoading();
+    } catch (error) {
+      this.hideLoading();
+      this.showError(`Failed to process ${domain}: ${(error as Error).message}`);
+    }
+  }
+
+  private viewDomainDetails(domain: string): void {
+    const domainResult = this.domainResults.get(domain);
+    if (!domainResult) return;
+    
+    // Set the current results to this domain's results
+    this.pages = domainResult.pages;
+    this.auditResults = domainResult.auditResults;
+    this.auditSummary = domainResult.auditSummary;
+    
+    // Process page-wise data and render results
+    this.processPageWiseData();
+    this.renderResults();
+    this.goToStep(3);
+  }
+
+  private generateDomainReport(domain: string): void {
+    const domainResult = this.domainResults.get(domain);
+    if (!domainResult) return;
+    
+    // Set the current results to this domain's results
+    this.pages = domainResult.pages;
+    this.auditResults = domainResult.auditResults;
+    this.auditSummary = domainResult.auditSummary;
+    
+    // Generate the report
+    this.generateAccessibilityReport();
+  }
+
+  private exportDomainData(domain: string): void {
+    const domainResult = this.domainResults.get(domain);
+    if (!domainResult) return;
+    
+    // Set the current results to this domain's results
+    this.pages = domainResult.pages;
+    this.auditResults = domainResult.auditResults;
+    this.auditSummary = domainResult.auditSummary;
+    
+    // Process page-wise data and go to results step to show export options
+    this.processPageWiseData();
+    this.renderResults();
+    this.goToStep(3);
+  }
+
+  private renderMultiDomainResults(): void {
+    // Update the UI to show the domain cards with results
+    this.renderMultiDomains();
   }
 
   private _removeMultiDomainHandler = (e: Event) => {
@@ -368,92 +515,111 @@ export class AutomaticAuditApp {
     this.setButtonLoading('startMultiDomainCrawl', true);
 
     try {
-      // Use the working single-domain approach for each domain
-      const allPages: CrawledPage[] = [];
-      const allAuditResults: AuditResult[] = [];
-      const maxPages = parseInt((document.getElementById('maxPages') as HTMLInputElement)?.value || '10');
-
-      // Process each domain using the working /api/crawl endpoint
+      // Process each domain individually (first 3 pages for multi-domain)
       for (let i = 0; i < this.multiDomains.length; i++) {
         const domain = this.multiDomains[i];
-        this.showLoading(`Crawling domain ${i + 1}/${this.multiDomains.length}: ${domain}...`);
+        this.showLoading(`Processing domain ${i + 1}/${this.multiDomains.length}: ${domain} (first 3 pages)...`);
 
         try {
-          // Crawl the domain
-          const crawlResponse = await fetch('/api/crawl', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              mainUrl: domain,
-              maxPages: maxPages
-            })
-          });
-
-          const crawlData = await crawlResponse.json();
-
-          if (!crawlResponse.ok) {
-            throw new Error(crawlData.error || `Failed to crawl ${domain}`);
-          }
-
-          // Add domain prefix to pages
-          const domainPages = crawlData.pages.map((page: CrawledPage) => ({
-            ...page,
-            url: page.url,
-            title: `[${domain}] ${page.title}`,
-            selected: true
-          }));
-
-          allPages.push(...domainPages);
-
-          // Audit the pages for this domain
-          this.showLoading(`Auditing domain ${i + 1}/${this.multiDomains.length}: ${domain}...`);
-          
-          const auditResponse = await fetch('/api/audit', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              pages: domainPages.map((p: CrawledPage) => p.url),
-              customUrls: []
-            })
-          });
-
-          const auditData = await auditResponse.json();
-
-          if (!auditResponse.ok) {
-            throw new Error(auditData.error || `Failed to audit ${domain}`);
-          }
-
-          allAuditResults.push(...auditData.results);
-
+          // Process this domain individually (first 3 pages)
+          await this.processSingleDomain(domain, 3);
         } catch (error) {
           console.error(`Error processing domain ${domain}:`, error);
           // Continue with other domains even if one fails
         }
       }
 
-      // Set the combined results
-      this.pages = allPages;
-      this.auditResults = allAuditResults;
-      this.auditSummary = this.generateCombinedSummary(allAuditResults);
-      
-      // Process page-wise data
-      this.processPageWiseData();
-      
-      // Store audit data for comparison
-      this.storeAuditData();
-      
-      this.renderResults();
-      this.goToStep(3);
+      // Update the UI to show individual domain results
+      this.renderMultiDomainResults();
+      this.hideLoading();
+      this.setButtonLoading('startMultiDomainCrawl', false);
 
     } catch (error) {
       this.showError((error as Error).message);
-    } finally {
       this.hideLoading();
       this.setButtonLoading('startMultiDomainCrawl', false);
+    }
+  }
+
+  private async processSingleDomain(domain: string, _maxPages: number): Promise<void> {
+    try {
+      // Crawl the domain (first 3 pages for multi-domain)
+      const crawlResponse = await fetch('/api/crawl', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          mainUrl: domain,
+          maxPages: 3, // Crawl first 3 pages including homepage
+          homepageOnly: false // Allow discovering additional pages
+        })
+      });
+
+      const crawlData = await crawlResponse.json();
+
+      if (!crawlResponse.ok) {
+        throw new Error(crawlData.error || `Failed to crawl ${domain}`);
+      }
+
+      // Add domain prefix to pages
+      const domainPages = crawlData.pages.map((page: CrawledPage) => ({
+        ...page,
+        url: page.url,
+        title: `[${domain}] ${page.title}`,
+        selected: true
+      }));
+
+      // Audit the pages for this domain
+      const auditResponse = await fetch('/api/audit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pages: domainPages.map((p: CrawledPage) => p.url),
+          customUrls: []
+        })
+      });
+
+      const auditData = await auditResponse.json();
+
+      if (!auditResponse.ok) {
+        throw new Error(auditData.error || `Failed to audit ${domain}`);
+      }
+
+      // Generate summary for this domain
+      const domainSummary = this.generateCombinedSummary(auditData.results);
+
+      // Store results for this domain
+      this.domainResults.set(domain, {
+        pages: domainPages,
+        auditResults: auditData.results,
+        auditSummary: domainSummary
+      });
+
+    } catch (error) {
+      console.error(`Error processing domain ${domain}:`, error);
+      // Store error state for this domain
+      this.domainResults.set(domain, {
+        pages: [],
+        auditResults: [],
+        auditSummary: {
+          totalPages: 0,
+          pagesWithIssues: 0,
+          totalIssues: 0,
+          errors: 0,
+          warnings: 0,
+          hints: 0,
+          criticalIssues: 0,
+          seriousIssues: 0,
+          moderateIssues: 0,
+          scorePercentage: 0,
+          categories: {},
+          topIssues: [],
+          timestamp: new Date().toISOString()
+        }
+      });
     }
   }
 
@@ -469,10 +635,10 @@ export class AutomaticAuditApp {
       criticalIssues: 0,
       seriousIssues: 0,
       moderateIssues: 0,
+      scorePercentage: 0,
       categories: {},
       topIssues: [],
       timestamp: new Date().toISOString(),
-      // scorePercentage: 0,
     };
 
     if (auditResults) {
@@ -1387,6 +1553,27 @@ export class AutomaticAuditApp {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  private normalizeUrl(url: string): string {
+    try {
+      const urlObj = new URL(url);
+      
+      // For root paths, ensure consistent trailing slash
+      if (urlObj.pathname === '/' || urlObj.pathname === '') {
+        return `${urlObj.protocol}//${urlObj.hostname}/`;
+      }
+      
+      // For other paths, remove trailing slash for consistency
+      if (urlObj.pathname.endsWith('/') && urlObj.pathname !== '/') {
+        urlObj.pathname = urlObj.pathname.slice(0, -1);
+      }
+      
+      return urlObj.toString();
+    } catch {
+      // If URL parsing fails, return the original URL
+      return url;
     }
   }
 

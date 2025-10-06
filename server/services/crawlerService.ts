@@ -27,10 +27,11 @@ export class CrawlerService {
    * Crawl a website to discover pages for accessibility auditing
    * @param {string} mainUrl - The main URL to start crawling from
    * @param {number} maxPages - Maximum number of pages to crawl (defaults to configured limit)
+   * @param {boolean} homepageOnly - If true, only crawl the main URL without discovering additional pages
    * @returns {Promise<PageData[]>} Array of discovered pages with metadata
    * @description Uses both link extraction and sitemap.xml parsing to discover pages
    */
-  async crawlWebsite(mainUrl: string, maxPages: number = this.maxPages): Promise<PageData[]> {
+  async crawlWebsite(mainUrl: string, maxPages: number = this.maxPages, homepageOnly: boolean = false): Promise<PageData[]> {
     const baseUrl = this.normalizeUrl(mainUrl);
     const visited = new Set<string>();
     const toVisit: string[] = [baseUrl];
@@ -39,49 +40,63 @@ export class CrawlerService {
 
     console.log(`🔍 Starting crawl of: ${baseUrl}`);
     console.log(`📊 Max pages to crawl (enforced): ${maxPages}`);
+    console.log(`🏠 Homepage only mode: ${homepageOnly}`);
 
-    // First, try to get URLs from sitemap.xml
-    const sitemapUrls = await this.getSitemapUrls(baseUrl, domain);
-    if (sitemapUrls.length > 0) {
-      console.log(`🗺️  Found ${sitemapUrls.length} URLs in sitemap.xml`);
-      // Add sitemap URLs to the queue (excluding the main URL which is already there)
-      for (const url of sitemapUrls) {
-        if (url !== baseUrl && !visited.has(url) && !toVisit.includes(url)) {
-          toVisit.push(url);
+    // If homepageOnly is true, skip sitemap discovery and link extraction
+    if (!homepageOnly) {
+      // First, try to get URLs from sitemap.xml
+      const sitemapUrls = await this.getSitemapUrls(baseUrl, domain);
+      if (sitemapUrls.length > 0) {
+        console.log(`🗺️  Found ${sitemapUrls.length} URLs in sitemap.xml`);
+        // Add sitemap URLs to the queue (excluding the main URL which is already there)
+        for (const url of sitemapUrls) {
+          const normalizedUrl = this.normalizeUrl(url);
+          if (normalizedUrl !== baseUrl && !visited.has(normalizedUrl) && !toVisit.includes(normalizedUrl)) {
+            toVisit.push(normalizedUrl);
+          }
         }
+      } else {
+        console.log(`⚠️  No sitemap.xml found or no valid URLs extracted`);
       }
     } else {
-      console.log(`⚠️  No sitemap.xml found or no valid URLs extracted`);
+      console.log(`🏠 Homepage-only mode: Skipping sitemap discovery and link extraction`);
     }
 
     while (toVisit.length > 0 && pages.length < maxPages) {
       const currentUrl = toVisit.shift()!;
+      const normalizedCurrentUrl = this.normalizeUrl(currentUrl);
       
-      if (visited.has(currentUrl)) {
+      if (visited.has(normalizedCurrentUrl)) {
         continue;
       }
 
-      visited.add(currentUrl);
+      visited.add(normalizedCurrentUrl);
 
       try {
         console.log(`📄 Crawling: ${currentUrl}`);
         const pageData = await this.fetchPage(currentUrl);
         
         if (pageData) {
+          // Check if this is a 404 page and skip it
+          if (this.is404Page(currentUrl, pageData)) {
+            continue;
+          }
+          
           pages.push(pageData);
           
-          // Only extract links from pages if we haven't reached the limit
-          if (pages.length < maxPages) {
-            // Extract links from the page
-            const links = this.extractLinks(pageData.html, baseUrl, domain);
-            
-            // Add new links to the queue
-            for (const link of links) {
-              if (!visited.has(link) && !toVisit.includes(link)) {
-                toVisit.push(link);
-              }
+        // Only extract links from pages if we haven't reached the limit and not in homepage-only mode
+        if (pages.length < maxPages && !homepageOnly) {
+          // Extract links from the page
+          const links = this.extractLinks(pageData.html, baseUrl, domain);
+          
+          // Add new links to the queue
+          for (const link of links) {
+            const normalizedLink = this.normalizeUrl(link);
+            if (!visited.has(normalizedLink) && !toVisit.includes(normalizedLink)) {
+              toVisit.push(normalizedLink);
             }
           }
+        }
         }
 
         // Add delay between requests
@@ -343,9 +358,27 @@ export class CrawlerService {
 
   private normalizeUrl(url: string): string {
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      return `https://${url}`;
+      url = `https://${url}`;
     }
-    return url;
+    
+    try {
+      const urlObj = new URL(url);
+      
+      // For root paths, ensure consistent trailing slash
+      if (urlObj.pathname === '/' || urlObj.pathname === '') {
+        return `${urlObj.protocol}//${urlObj.hostname}/`;
+      }
+      
+      // For other paths, remove trailing slash for consistency
+      if (urlObj.pathname.endsWith('/') && urlObj.pathname !== '/') {
+        const newPath = urlObj.pathname.slice(0, -1);
+        return `${urlObj.protocol}//${urlObj.hostname}${newPath}`;
+      }
+      
+      return urlObj.toString();
+    } catch {
+      return url;
+    }
   }
 
   /**
@@ -438,5 +471,39 @@ export class CrawlerService {
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Check if a page is a 404 error page
+   * @param {string} url - The URL of the page
+   * @param {PageData} pageData - The page data to check
+   * @returns {boolean} True if this is a 404 page
+   */
+  private is404Page(url: string, pageData: PageData): boolean {
+    // Check URL path for 404 indicators
+    const urlObj = new URL(url);
+    const urlPath = urlObj.pathname.toLowerCase();
+    if (urlPath.includes('/404') || urlPath.includes('/not-found') || urlPath.includes('/error')) {
+      return true;
+    }
+
+    // Check HTTP status code
+    if (pageData.statusCode === 404) {
+      return true;
+    }
+
+    // Check page title for 404 indicators
+    const title = pageData.title.toLowerCase();
+    if (title.includes('404') || title.includes('not found') || title.includes('page not found')) {
+      return true;
+    }
+
+    // Check HTML content for 404 indicators
+    const html = pageData.html.toLowerCase();
+    if (html.includes('404') || html.includes('not found') || html.includes('page not found')) {
+      return true;
+    }
+
+    return false;
   }
 } 
