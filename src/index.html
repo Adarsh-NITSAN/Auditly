@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="./logo.png" type="image">
+    <meta name="description" content="Auditly is a comprehensive accessibility auditing tool for multiple pages.">
     <title>Auditly</title>
     <link rel="stylesheet" href="./styles/main.scss">
 </head>
 <body>
     <main class="site-main">
+        <header class="header">
+            <h1 class="display-5 fw-bold">🔎 Auditly</h1>
+            <p class="lead opacity-75">Comprehensive accessibility auditing for multiple pages</p>
+        </header>
         <div class="container">
-            <header class="header">
-                <img src="./logo.png" class="logo mb-2" height="50" width="50" alt="Auditly" class="logo">
-                <h1 class="display-5 fw-bold">Auditly</h1>
-                <p class="lead opacity-75">Comprehensive accessibility auditing for multiple pages</p>
-            </header>
-    
-            <main class="main-content">
+            <div class="main-content">
                 <!-- Step 1: URL Input -->
                 <section id="step1" class="step active">
                     <div class="card shadow-lg">
@@ -41,7 +41,7 @@
                                         Crawling...
                                     </span>
                                 </button>
-                                <button id="startMultiDomain" class="btn btn-outline-primary btn-lg">
+                                <button id="startMultiDomain" class="btn btn-outline-secondary btn-lg">
                                     <span class="btn-text">Search Multiple Domains</span>
                                 </button>
                             </div>
@@ -143,7 +143,7 @@
                         </div>
                     </div>
                 </section>
-            </main>
+            </div>
     
             <!-- Loading Overlay -->
             <div id="loadingOverlay" class="loading-overlay d-none">

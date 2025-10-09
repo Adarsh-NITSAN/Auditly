@@ -1,6 +1,6 @@
 // Custom Bootstrap Theme Variables
 :root {
-  --bs-primary: #0101d9 !important;
+  --bs-primary: #0466c8 !important;
   --bs-primary-rgb: 102, 126, 234;
   --bs-secondary: #764ba2;
   --bs-secondary-rgb: 118, 75, 162;
@@ -20,20 +20,19 @@ body {
   
   .site-main {
     padding: 0;
-    min-height: 100vh;
   }
 
   .container {
     max-width: 1200px;
-    margin: 2rem auto;
+    margin: 4rem auto;
   }
 }
 
 // Custom header styling
 .header {
-  color: white;
+  color: #ffffff;
   text-align: center;
-  margin-bottom: 2rem;
+  margin: 3rem 1rem;
 }
 
 // Custom step transitions
@@ -214,27 +213,73 @@ body {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
-// Custom button hover effects
-.btn.btn-primary {
-  --bs-btn-bg: #0101d9;
-  transition: all 0.3s ease 0s;
-}
-
-.btn.btn-outline-secondary {
-  background-color: #ffee00;
-  color: #000000;
-  transition: all 0.3s ease 0s;
-
+// Modern button hover effects
+.btn {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateZ(0);
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+    z-index: 1;
+  }
+  
+  &:hover::before {
+    left: 100%;
+  }
+  
   &:hover {
-    background-color: transparent;
-    color: #000000;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  }
+  
+  &:active {
+    transform: translateY(0);
   }
 }
 
-.btn.btn-primary:hover {
-  background-color: transparent;
-  border-color: #000000;
-  color: #000000;
+.btn-primary {
+  --bs-btn-bg: #4a55c9 !important;
+  background: linear-gradient(135deg, #4a55c9, #0466c8);
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(84, 110, 181, 0.3);
+  transition: all 0.3s ease 0s !important;
+  min-width: 5rem;
+  
+  &:hover {
+    background: linear-gradient(135deg, #0466c8, #4a3d7a);
+    box-shadow: 0 8px 25px rgba(109, 84, 181, 0.4);
+    transform: translateY(-2px);
+  }
+  
+  &:focus {
+    box-shadow: 0 0 0 3px rgba(109, 84, 181, 0.3);
+  }
+}
+
+.btn-outline-secondary {
+  --bs-btn-bg: #ffee00 !important;
+  background: linear-gradient(135deg, #ffee00, #ffd700) !important;
+  color: #000000 !important;
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(255, 238, 0, 0.3);
+  transition: all 0.3s ease 0s !important;
+  min-width: 5rem;
+  
+  &:hover {
+    background: linear-gradient(135deg, #d5b501, #ffcc00);
+    color: #000000 !important;
+    box-shadow: 0 8px 25px rgba(255, 238, 0, 0.4);
+    transform: translateY(-2px);
+  }
 }
 
 // Custom form focus states
@@ -701,4 +746,8 @@ body {
       }
     }
   }
+}
+
+.btn-group .btn-outline-secondary {
+  border: 1px solid #000 !important;
 }

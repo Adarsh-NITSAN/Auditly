@@ -314,6 +314,8 @@ export class AutomaticAuditApp {
     multiDomainsList.innerHTML = this.multiDomains.map((url, index) => {
       const domainResult = this.domainResults.get(url);
       const hasResults = domainResult && domainResult.auditResults.length > 0;
+      const hasBeenProcessed = domainResult !== undefined;
+      const hasPages = domainResult && domainResult.pages.length > 0;
       
       return `
         <div class="domain-card bg-light p-3 mb-3 rounded-2 border">
@@ -332,9 +334,13 @@ export class AutomaticAuditApp {
                     ${domainResult.auditSummary.totalIssues} total issues
                   </span>
                 </div>
+              ` : hasBeenProcessed ? `
+                <div class="domain-status text-muted small">
+                  ${hasPages ? 'Processing completed - No accessibility issues found' : 'Processing completed - No pages discovered (may be JavaScript-heavy site)'}
+                </div>
               ` : `
                 <div class="domain-status text-muted small">
-                  ${domainResult ? 'Processing completed' : 'Ready to process'}
+                  Ready to process
                 </div>
               `}
             </div>
@@ -349,6 +355,15 @@ export class AutomaticAuditApp {
                   </button>
                   <button type="button" class="btn btn-sm btn-outline-secondary" data-domain="${url}" data-action="export">
                     Export
+                  </button>
+                </div>
+              ` : hasBeenProcessed ? `
+                <div class="btn-group" role="group">
+                  <button type="button" class="btn btn-sm btn-outline-info" data-domain="${url}" data-action="retry">
+                    Retry Crawl
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" data-domain="${url}" data-action="view">
+                    View Details
                   </button>
                 </div>
               ` : `
@@ -400,6 +415,11 @@ export class AutomaticAuditApp {
     
     switch (action) {
       case 'process':
+        this.processSingleDomainAsync(domain);
+        break;
+      case 'retry':
+        // Remove the existing result and reprocess
+        this.domainResults.delete(domain);
         this.processSingleDomainAsync(domain);
         break;
       case 'view':
@@ -560,6 +580,32 @@ export class AutomaticAuditApp {
 
       if (!crawlResponse.ok) {
         throw new Error(crawlData.error || `Failed to crawl ${domain}`);
+      }
+
+      // Check if any pages were discovered
+      if (!crawlData.pages || crawlData.pages.length === 0) {
+        console.warn(`⚠️  No pages discovered for domain: ${domain}`);
+        // Store empty result for this domain
+        this.domainResults.set(domain, {
+          pages: [],
+          auditResults: [],
+          auditSummary: {
+            totalPages: 0,
+            pagesWithIssues: 0,
+            totalIssues: 0,
+            errors: 0,
+            warnings: 0,
+            hints: 0,
+            criticalIssues: 0,
+            seriousIssues: 0,
+            moderateIssues: 0,
+            scorePercentage: 0,
+            categories: {},
+            topIssues: [],
+            timestamp: new Date().toISOString()
+          }
+        });
+        return; // Skip auditing for this domain
       }
 
       // Add domain prefix to pages

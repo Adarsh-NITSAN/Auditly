@@ -15,6 +15,7 @@ export class CrawlerService {
         const visited = new Set();
         const toVisit = [baseUrl];
         const pages = [];
+        const failedUrls = [];
         const domain = new URL(baseUrl).hostname;
         console.log(`🔍 Starting crawl of: ${baseUrl}`);
         console.log(`📊 Max pages to crawl (enforced): ${maxPages}`);
@@ -36,6 +37,14 @@ export class CrawlerService {
         }
         else {
             console.log(`🏠 Homepage-only mode: Skipping sitemap discovery and link extraction`);
+        }
+        if (toVisit.length === 0) {
+            toVisit.push(baseUrl);
+            console.log(`🔄 No additional URLs found, will crawl main URL only: ${baseUrl}`);
+        }
+        if (toVisit.length === 0) {
+            console.error(`❌ No URLs to crawl for ${baseUrl}. This might indicate a problem with the initial URL or sitemap parsing.`);
+            return pages;
         }
         while (toVisit.length > 0 && pages.length < maxPages) {
             const currentUrl = toVisit.shift();
@@ -68,13 +77,18 @@ export class CrawlerService {
             }
             catch (error) {
                 console.error(`❌ Error crawling ${currentUrl}:`, error.message);
+                failedUrls.push(currentUrl);
             }
         }
         console.log(`✅ Crawl completed. Found ${pages.length} pages (limit was ${maxPages}).`);
+        if (failedUrls.length > 0) {
+            console.log(`⚠️  Failed to crawl ${failedUrls.length} URLs:`, failedUrls);
+        }
         return pages;
     }
     async fetchPage(url) {
         try {
+            console.log(`🌐 Fetching: ${url}`);
             const response = await axios.get(url, {
                 timeout: this.timeout,
                 headers: {
@@ -132,7 +146,27 @@ export class CrawlerService {
             };
         }
         catch (error) {
-            console.error(`Failed to fetch ${url}:`, error.message);
+            const errorMessage = error.message;
+            const errorCode = error.code;
+            const errorStatus = error.response?.status;
+            console.error(`❌ Failed to fetch ${url}:`, {
+                message: errorMessage,
+                code: errorCode,
+                status: errorStatus,
+                type: error.constructor?.name || 'Unknown'
+            });
+            if (errorCode === 'ECONNABORTED') {
+                console.error(`⏰ Request timeout for ${url} (${this.timeout}ms)`);
+            }
+            else if (errorCode === 'ENOTFOUND') {
+                console.error(`🌐 DNS resolution failed for ${url}`);
+            }
+            else if (errorCode === 'ECONNREFUSED') {
+                console.error(`🚫 Connection refused for ${url}`);
+            }
+            else if (errorStatus) {
+                console.error(`📊 HTTP ${errorStatus} error for ${url}`);
+            }
             return null;
         }
     }
@@ -388,12 +422,13 @@ export class CrawlerService {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
     is404Page(url, pageData) {
-        const urlObj = new URL(url);
-        const urlPath = urlObj.pathname.toLowerCase();
-        if (urlPath.includes('/404') || urlPath.includes('/not-found') || urlPath.includes('/error')) {
+        if (pageData.statusCode === 404) {
             return true;
         }
-        if (pageData.statusCode === 404) {
+        const urlObj = new URL(url);
+        const urlPath = urlObj.pathname.toLowerCase();
+        if (urlPath.includes('/not-found') || urlPath.includes('/error') ||
+            urlPath.includes('/page-not-found') || urlPath.includes('/file-not-found')) {
             return true;
         }
         const title = pageData.title.toLowerCase();
@@ -401,7 +436,8 @@ export class CrawlerService {
             return true;
         }
         const html = pageData.html.toLowerCase();
-        if (html.includes('404') || html.includes('not found') || html.includes('page not found')) {
+        if (html.includes('404 error') || html.includes('not found') ||
+            html.includes('page not found') || html.includes('file not found')) {
             return true;
         }
         return false;

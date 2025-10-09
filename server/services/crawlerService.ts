@@ -36,6 +36,7 @@ export class CrawlerService {
     const visited = new Set<string>();
     const toVisit: string[] = [baseUrl];
     const pages: PageData[] = [];
+    const failedUrls: string[] = [];
     const domain = new URL(baseUrl).hostname;
 
     console.log(`🔍 Starting crawl of: ${baseUrl}`);
@@ -60,6 +61,19 @@ export class CrawlerService {
       }
     } else {
       console.log(`🏠 Homepage-only mode: Skipping sitemap discovery and link extraction`);
+    }
+
+    // If no additional URLs were found and we're not in homepage-only mode, 
+    // ensure we at least have the main URL to crawl
+    if (toVisit.length === 0) {
+      toVisit.push(baseUrl);
+      console.log(`🔄 No additional URLs found, will crawl main URL only: ${baseUrl}`);
+    }
+
+    // If we still have no URLs to visit, something went wrong
+    if (toVisit.length === 0) {
+      console.error(`❌ No URLs to crawl for ${baseUrl}. This might indicate a problem with the initial URL or sitemap parsing.`);
+      return pages;
     }
 
     while (toVisit.length > 0 && pages.length < maxPages) {
@@ -106,15 +120,20 @@ export class CrawlerService {
 
       } catch (error) {
         console.error(`❌ Error crawling ${currentUrl}:`, (error as Error).message);
+        failedUrls.push(currentUrl);
       }
     }
 
     console.log(`✅ Crawl completed. Found ${pages.length} pages (limit was ${maxPages}).`);
+    if (failedUrls.length > 0) {
+      console.log(`⚠️  Failed to crawl ${failedUrls.length} URLs:`, failedUrls);
+    }
     return pages;
   }
 
   private async fetchPage(url: string): Promise<PageData | null> {
     try {
+      console.log(`🌐 Fetching: ${url}`);
       const response = await axios.get(url, {
         timeout: this.timeout,
         headers: {
@@ -181,7 +200,28 @@ export class CrawlerService {
         contentType: response.headers['content-type'] || '',
       };
     } catch (error) {
-      console.error(`Failed to fetch ${url}:`, (error as Error).message);
+      const errorMessage = (error as Error).message;
+      const errorCode = (error as any).code;
+      const errorStatus = (error as any).response?.status;
+      
+      console.error(`❌ Failed to fetch ${url}:`, {
+        message: errorMessage,
+        code: errorCode,
+        status: errorStatus,
+        type: (error as any).constructor?.name || 'Unknown'
+      });
+      
+      // Log specific error types for debugging
+      if (errorCode === 'ECONNABORTED') {
+        console.error(`⏰ Request timeout for ${url} (${this.timeout}ms)`);
+      } else if (errorCode === 'ENOTFOUND') {
+        console.error(`🌐 DNS resolution failed for ${url}`);
+      } else if (errorCode === 'ECONNREFUSED') {
+        console.error(`🚫 Connection refused for ${url}`);
+      } else if (errorStatus) {
+        console.error(`📊 HTTP ${errorStatus} error for ${url}`);
+      }
+      
       return null;
     }
   }
@@ -480,15 +520,18 @@ export class CrawlerService {
    * @returns {boolean} True if this is a 404 page
    */
   private is404Page(url: string, pageData: PageData): boolean {
-    // Check URL path for 404 indicators
-    const urlObj = new URL(url);
-    const urlPath = urlObj.pathname.toLowerCase();
-    if (urlPath.includes('/404') || urlPath.includes('/not-found') || urlPath.includes('/error')) {
+    // Check HTTP status code first - this is the most reliable indicator
+    if (pageData.statusCode === 404) {
       return true;
     }
 
-    // Check HTTP status code
-    if (pageData.statusCode === 404) {
+    // Check URL path for 404 indicators (but not if it's a legitimate 404 page in sitemap)
+    const urlObj = new URL(url);
+    const urlPath = urlObj.pathname.toLowerCase();
+    
+    // Only filter out if it's clearly an error page, not a legitimate page about 404s
+    if (urlPath.includes('/not-found') || urlPath.includes('/error') || 
+        urlPath.includes('/page-not-found') || urlPath.includes('/file-not-found')) {
       return true;
     }
 
@@ -498,9 +541,10 @@ export class CrawlerService {
       return true;
     }
 
-    // Check HTML content for 404 indicators
+    // Check HTML content for 404 indicators (but be more specific)
     const html = pageData.html.toLowerCase();
-    if (html.includes('404') || html.includes('not found') || html.includes('page not found')) {
+    if (html.includes('404 error') || html.includes('not found') || 
+        html.includes('page not found') || html.includes('file not found')) {
       return true;
     }
 

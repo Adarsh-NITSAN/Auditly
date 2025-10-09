@@ -171,7 +171,7 @@ export class ReportService {
                 return;
             }
             const severityCounts = this.calculatePageSeverityCounts(result);
-            const totalScore = result.summary.scorePercentage || 0;
+            const totalScore = (result.summary.criticalIssues || 0) + (result.summary.seriousIssues || 0) + (result.summary.moderateIssues || 0);
             csvRows.push([
                 this.escapeCsvField(result.url),
                 severityCounts.critical.toString(),
