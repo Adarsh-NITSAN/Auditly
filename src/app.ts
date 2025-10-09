@@ -477,17 +477,54 @@ export class AutomaticAuditApp {
 
   private exportDomainData(domain: string): void {
     const domainResult = this.domainResults.get(domain);
-    if (!domainResult) return;
+    if (!domainResult) {
+      this.showError('No audit results found for this domain');
+      return;
+    }
     
-    // Set the current results to this domain's results
-    this.pages = domainResult.pages;
-    this.auditResults = domainResult.auditResults;
-    this.auditSummary = domainResult.auditSummary;
-    
-    // Process page-wise data and go to results step to show export options
-    this.processPageWiseData();
-    this.renderResults();
-    this.goToStep(3);
+    // Directly export CSV for this domain instead of navigating to results
+    this.exportDomainCsv(domain, domainResult.auditResults);
+  }
+
+  private async exportDomainCsv(domain: string, auditResults: AuditResult[]): Promise<void> {
+    if (!auditResults || auditResults.length === 0) {
+      this.showError(`No audit results available for ${domain}. Please process the domain first.`);
+      return;
+    }
+
+    try {
+      this.showLoading('Generating CSV report...');
+      
+      const response = await fetch('/api/report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          results: auditResults,
+          format: 'csv'
+        })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to generate CSV report');
+      }
+
+      const csvContent = await response.text();
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      
+      // Create filename with domain name
+      const domainName = domain.replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/[^a-zA-Z0-9.-]/g, '-');
+      const filename = `accessibility-audit-${domainName}-${new Date().toISOString().split('T')[0]}.csv`;
+      
+      this.downloadFile(blob, filename);
+      this.hideLoading();
+
+    } catch (error) {
+      this.hideLoading();
+      this.showError(`Failed to export CSV: ${(error as Error).message}`);
+    }
   }
 
   private renderMultiDomainResults(): void {
@@ -1283,28 +1320,40 @@ export class AutomaticAuditApp {
 
         <div class="report-summary mb-4">
           <div class="row text-center">
-            <div class="col-md-3 col-6 mb-3">
+            <div class="col-md-2 col-6 mb-3">
               <div class="summary-card">
                 <div class="summary-number">${this.auditSummary.totalPages}</div>
                 <div class="summary-label">Pages Audited</div>
               </div>
             </div>
-            <div class="col-md-3 col-6 mb-3">
+            <div class="col-md-2 col-6 mb-3">
               <div class="summary-card">
                 <div class="summary-number">${this.auditSummary.pagesWithIssues}</div>
                 <div class="summary-label">Pages with Issues</div>
               </div>
             </div>
-            <div class="col-md-3 col-6 mb-3">
+            <div class="col-md-2 col-6 mb-3">
+              <div class="summary-card border-danger">
+                <div class="summary-number text-danger">${criticalIssues}</div>
+                <div class="summary-label text-danger">Critical Issues</div>
+              </div>
+            </div>
+            <div class="col-md-2 col-6 mb-3">
+              <div class="summary-card border-warning">
+                <div class="summary-number text-warning">${seriousIssues}</div>
+                <div class="summary-label text-warning">Serious Issues</div>
+              </div>
+            </div>
+            <div class="col-md-2 col-6 mb-3">
+              <div class="summary-card border-info">
+                <div class="summary-number text-info">${moderateIssues}</div>
+                <div class="summary-label text-info">Moderate Issues</div>
+              </div>
+            </div>
+            <div class="col-md-2 col-6 mb-3">
               <div class="summary-card">
                 <div class="summary-number">${totalIssues}</div>
                 <div class="summary-label">Total Issues</div>
-              </div>
-            </div>
-            <div class="col-md-3 col-6 mb-3">
-              <div class="summary-card">
-                <div class="summary-number">${this.auditSummary.topIssues?.length || 0}</div>
-                <div class="summary-label">Issue Categories</div>
               </div>
             </div>
           </div>
@@ -1370,6 +1419,11 @@ export class AutomaticAuditApp {
               </tbody>
             </table>
           </div>
+        </div>
+
+        <div class="individual-page-breakdown mt-5">
+          <h3 class="mb-4">Individual Page Analysis</h3>
+          ${this.renderIndividualPageTables()}
         </div>
 
         <div class="recommendations mt-4">
@@ -1454,6 +1508,113 @@ export class AutomaticAuditApp {
     return 'score-poor';
   }
 
+
+  private renderIndividualPageTables(): string {
+    if (!this.auditResults || this.auditResults.length === 0) {
+      return '<div class="alert alert-info">No individual page data available.</div>';
+    }
+
+    return this.auditResults.map((result, index) => {
+      if (result.error) {
+        return `
+          <div class="page-analysis-card mb-4">
+            <div class="card">
+              <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">${this.extractPageTitle(result.url)}</h5>
+                <small>${result.url}</small>
+              </div>
+              <div class="card-body">
+                <div class="alert alert-danger">
+                  <strong>Error:</strong> ${result.error}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      // Calculate individual page statistics
+      const pageCritical = result.summary.criticalIssues || 0;
+      const pageSerious = result.summary.seriousIssues || 0;
+      const pageModerate = result.summary.moderateIssues || 0;
+
+      // Get examples for this specific page
+      const pageCriticalExamples = this.getPageIssueExamplesByImpact(result, 'critical', 3);
+      const pageSeriousExamples = this.getPageIssueExamplesByImpact(result, 'serious', 3);
+      const pageModerateExamples = this.getPageIssueExamplesByImpact(result, 'moderate', 3);
+
+      return `
+        <div class="page-analysis-card mb-4">
+          <div class="card">
+            <div class="card-header bg-primary text-white">
+              <h5 class="mb-0">${this.extractPageTitle(result.url)}</h5>
+              <small>${result.url}</small>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table class="table table-striped">
+                  <thead>
+                    <tr>
+                      <th>Severity</th>
+                      <th>Issues Detected</th>
+                      <th>Examples Found</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="severity-critical">
+                      <td><span class="severity-badge critical">Critical</span></td>
+                      <td><strong>${pageCritical}</strong></td>
+                      <td>${pageCriticalExamples.join(', ')}</td>
+                    </tr>
+                    <tr class="severity-serious">
+                      <td><span class="severity-badge serious">Serious</span></td>
+                      <td><strong>${pageSerious}</strong></td>
+                      <td>${pageSeriousExamples.join(', ')}</td>
+                    </tr>
+                    <tr class="severity-moderate">
+                      <td><span class="severity-badge moderate">Moderate</span></td>
+                      <td><strong>${pageModerate}</strong></td>
+                      <td>${pageModerateExamples.join(', ')}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  private getPageIssueExamplesByImpact(result: AuditResult, impact: string, maxExamples: number = 3): string[] {
+    if (!result.issues) return ['No examples available'];
+
+    const examples: string[] = [];
+    const seenExamples = new Set<string>();
+
+    // Check all issue types (errors, warnings, hints) for the specific impact
+    const allIssues = [
+      ...(result.issues.errors || []),
+      ...(result.issues.warnings || []),
+      ...(result.issues.hints || [])
+    ];
+
+    const matchingIssues = allIssues.filter(issue => 
+      (issue.impact || '').toLowerCase() === impact.toLowerCase()
+    );
+
+    for (const issue of matchingIssues) {
+      if (examples.length >= maxExamples) break;
+      
+      const example = this.getIssueExample(issue);
+      if (example && !seenExamples.has(example)) {
+        examples.push(example);
+        seenExamples.add(example);
+      }
+    }
+
+    return examples.length > 0 ? examples : ['No examples available'];
+  }
 
   private generateRecommendations(): string {
     const recommendations = [

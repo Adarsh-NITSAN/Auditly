@@ -26,7 +26,7 @@ export class CrawlerService {
                 console.log(`🗺️  Found ${sitemapUrls.length} URLs in sitemap.xml`);
                 for (const url of sitemapUrls) {
                     const normalizedUrl = this.normalizeUrl(url);
-                    if (normalizedUrl !== baseUrl && !visited.has(normalizedUrl) && !toVisit.includes(normalizedUrl)) {
+                    if (normalizedUrl !== baseUrl && !this.isExcludedFile(normalizedUrl) && !visited.has(normalizedUrl) && !toVisit.includes(normalizedUrl)) {
                         toVisit.push(normalizedUrl);
                     }
                 }
@@ -60,12 +60,16 @@ export class CrawlerService {
                     if (this.is404Page(currentUrl, pageData)) {
                         continue;
                     }
+                    if (this.isExcludedFile(currentUrl)) {
+                        console.log(`🚫 Skipping excluded file: ${currentUrl}`);
+                        continue;
+                    }
                     pages.push(pageData);
                     if (pages.length < maxPages && !homepageOnly) {
                         const links = this.extractLinks(pageData.html, baseUrl, domain);
                         for (const link of links) {
                             const normalizedLink = this.normalizeUrl(link);
-                            if (!visited.has(normalizedLink) && !toVisit.includes(normalizedLink)) {
+                            if (!this.isExcludedFile(normalizedLink) && !visited.has(normalizedLink) && !toVisit.includes(normalizedLink)) {
                                 toVisit.push(normalizedLink);
                             }
                         }
@@ -441,6 +445,25 @@ export class CrawlerService {
             return true;
         }
         return false;
+    }
+    isExcludedFile(url) {
+        try {
+            const urlObj = new URL(url);
+            const pathname = urlObj.pathname.toLowerCase();
+            if (pathname === '/robots.txt' || pathname.endsWith('/robots.txt')) {
+                return true;
+            }
+            if (pathname === '/sitemap.xml' || pathname.endsWith('/sitemap.xml')) {
+                return true;
+            }
+            if (pathname.includes('/sitemap') && pathname.endsWith('.xml')) {
+                return true;
+            }
+            return false;
+        }
+        catch {
+            return false;
+        }
     }
 }
 //# sourceMappingURL=crawlerService.js.map
